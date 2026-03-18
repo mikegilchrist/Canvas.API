@@ -64,17 +64,7 @@ from canvas_api import (
     search_files,
     update_page,
 )
-from io_utils import load_profile, read_token
-
-
-# ---- Session prefix utilities (shared with other scripts) ----
-
-def extract_session_prefix(title):
-    """Extract 'S12' or 'S06a' from 'S12: 2026-03-03 - Topic'."""
-    if not title:
-        return ""
-    m = re.match(r'^(S\d+[a-d]?)\s*:', title, re.IGNORECASE)
-    return m.group(1).upper() if m else ""
+from io_utils import extract_session_prefix, load_profile, read_token
 
 
 # ---- HTML section manipulation ----

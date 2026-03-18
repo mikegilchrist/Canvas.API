@@ -45,15 +45,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from canvas_api import get_quizzes, update_quiz
-from io_utils import load_profile, read_token
-
-
-def extract_session_prefix(title):
-    """Extract 'S12' or 'S06a' from 'S12: 2026-03-03 - Topic'."""
-    if not title:
-        return ""
-    m = re.match(r'^(S\d+[a-d]?)\s*:', title, re.IGNORECASE)
-    return m.group(1).upper() if m else ""
+from io_utils import extract_session_prefix, load_profile, read_token
 
 
 def find_quizzes_by_pattern(quizzes, pattern):

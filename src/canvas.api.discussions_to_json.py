@@ -46,7 +46,7 @@ from canvas_api import (
     get_discussion_topics,
     get_discussion_topic_view,
 )
-from io_utils import load_profile, read_token, sanitize_for_filename
+from io_utils import load_profile, read_token, sanitize_for_filename, write_json
 
 
 # ---- Anonymization ----
@@ -114,12 +114,12 @@ def download_one_discussion(base_url, token, course_id, topic,
         os.makedirs(topic_dir, exist_ok=True)
 
         # Write topic metadata
-        _write_json(os.path.join(topic_dir, "topic.json"), topic)
+        write_json(os.path.join(topic_dir, "topic.json"), topic)
 
         # Write view (optionally anonymized)
         if anonymize:
             view = anonymize_view(view)
-        _write_json(os.path.join(topic_dir, "view.json"), view)
+        write_json(os.path.join(topic_dir, "view.json"), view)
 
         entry_count = len(view.get("view", []))
         participant_count = len(view.get("participants", []))
@@ -131,12 +131,6 @@ def download_one_discussion(base_url, token, course_id, topic,
 
     except Exception as e:
         return None, str(e)
-
-
-def _write_json(path, obj):
-    """Write a JSON file with consistent formatting."""
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=True, indent=2)
 
 
 # ---- CLI ----

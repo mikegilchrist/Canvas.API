@@ -58,7 +58,7 @@ import zipfile
 sys.path.insert(0, os.path.dirname(__file__))
 
 from canvas_api import delete_quiz, get_quizzes, update_quiz, upload_qti_zip
-from io_utils import load_profile, read_token
+from io_utils import extract_session_prefix, load_profile, read_token, session_sort_key
 
 
 # ---- QTI zip introspection ----
@@ -80,28 +80,6 @@ def read_qti_title(zip_path):
                         if tag == "title":
                             return elem.text
     return None
-
-
-# ---- Session prefix utilities ----
-
-def extract_session_prefix(title):
-    """Extract 'S12' or 'S06a' from 'S12: 2026-03-03 - Topic'.
-    Returns uppercase prefix string, or '' if not found.
-    """
-    if not title:
-        return ""
-    m = re.match(r'^(S\d+[a-d]?)\s*:', title, re.IGNORECASE)
-    return m.group(1).upper() if m else ""
-
-
-def session_sort_key(prefix):
-    """Return (number, letter) sort key for prefixes like 'S12', 'S06a'."""
-    if not prefix:
-        return (999, "")
-    m = re.match(r'^S(\d+)([a-d]?)$', prefix, re.IGNORECASE)
-    if not m:
-        return (999, "")
-    return (int(m.group(1)), m.group(2).lower())
 
 
 # ---- Positioning ----

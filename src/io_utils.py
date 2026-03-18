@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
-# Date: 2026-02-20
-# Version: 1.3.0
+# Date: 2026-03-18
+# Version: 1.4.0
 # Purpose: Small IO helpers for reading/writing JSON files, selecting inputs,
 #          and loading the user profile (~/.canvas.api.conf).
 # Usage: Imported by CLI scripts.
@@ -68,6 +68,28 @@ def sanitize_for_filename(text, max_len=50):
     return text
 
 
+# ---- Session prefix utilities ----
+
+def extract_session_prefix(title):
+    """Extract 'S12' or 'S06a' from 'S12: 2026-03-03 - Topic'.
+    Returns uppercase prefix string, or '' if not found.
+    """
+    if not title:
+        return ""
+    m = re.match(r'^(S\d+[a-d]?)\s*:', title, re.IGNORECASE)
+    return m.group(1).upper() if m else ""
+
+
+def session_sort_key(prefix):
+    """Return (number, letter) sort key for prefixes like 'S12', 'S06a'."""
+    if not prefix:
+        return (999, "")
+    m = re.match(r'^S(\d+)([a-d]?)$', prefix, re.IGNORECASE)
+    if not m:
+        return (999, "")
+    return (int(m.group(1)), m.group(2).lower())
+
+
 # ---- Profile config ----
 
 _PROFILE_PATH = os.path.expanduser("~/.canvas.api.conf")
@@ -112,3 +134,23 @@ def read_token(token, token_file, profile=None):
         "No token provided. Use --token, --token-file, "
         "or set token_file in ~/.canvas.api.conf."
     )
+
+
+def resolve_credentials(args, ap):
+    """Resolve base_url and token from CLI args + profile config.
+
+    Reads ~/.canvas.api.conf, fills in base_url and token from profile
+    when not provided on the command line.  Calls ap.error() if base_url
+    cannot be resolved.
+
+    Returns (base_url, token).
+    """
+    profile = load_profile()
+    if not args.base_url:
+        args.base_url = profile.get("base_url")
+    if not args.base_url:
+        ap.error("--base-url is required (or set base_url in "
+                 "~/.canvas.api.conf)")
+    base_url = args.base_url.rstrip("/")
+    token = read_token(args.token, args.token_file, profile)
+    return base_url, token
