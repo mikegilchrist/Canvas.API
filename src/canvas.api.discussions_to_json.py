@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       canvas.api.discussions_to_json.py
-# Version:      1.0.0
+# Version:      1.1.0
 # Date:         2026-02-20
 # Purpose:      Download Canvas discussion topics with full threaded views
 #               (all entries, authors, messages) to JSON files.
@@ -46,6 +46,7 @@ from canvas_api import (
     get_discussion_topics,
     get_discussion_topic_view,
 )
+from canvas_html import html_to_markdown
 from io_utils import load_profile, read_token, sanitize_for_filename, write_json
 
 
@@ -89,10 +90,92 @@ def anonymize_view(view_data):
     return anon
 
 
+# ---- Markdown rendering ----
+
+def _format_date(iso_str):
+    """Extract YYYY-MM-DD from an ISO timestamp, or return '' if missing."""
+    if not iso_str:
+        return ""
+    return iso_str[:10]
+
+
+def _render_entry_md(entry, participants_map, depth=0):
+    """Render a single discussion entry and its replies as Markdown."""
+    lines = []
+    uid = entry.get("user_id")
+    author = participants_map.get(uid, "Unknown")
+    date = _format_date(entry.get("created_at"))
+    message_html = entry.get("message", "")
+    message_md = html_to_markdown(message_html).strip()
+
+    if depth == 0:
+        lines.append(f"### {author} ({date})")
+        lines.append("")
+        lines.append(message_md)
+    else:
+        indent_hdr = "#" * min(depth + 3, 6)
+        lines.append(f"\n{indent_hdr} Reply by {author} ({date})")
+        lines.append("")
+        # Indent replies with blockquote
+        for line in message_md.split("\n"):
+            lines.append(f"> {line}" if line.strip() else ">")
+
+    lines.append("")
+
+    for reply in entry.get("replies", []):
+        lines.append(_render_entry_md(reply, participants_map, depth + 1))
+
+    return "\n".join(lines)
+
+
+def render_discussion_md(topic, view):
+    """Render a discussion topic + view as readable Markdown.
+
+    Returns a Markdown string with topic description and all threads.
+    """
+    title = topic.get("title", "(untitled)")
+    participants = view.get("participants", [])
+    entries = view.get("view", [])
+
+    # Build user_id -> display_name map
+    pmap = {}
+    for p in participants:
+        pmap[p.get("id")] = p.get("display_name", "Unknown")
+
+    due = _format_date(
+        (topic.get("assignment") or {}).get("due_at", ""))
+
+    lines = [f"# {title}"]
+    lines.append("")
+    lines.append(f"*{len(entries)} threads, "
+                 f"{len(participants)} participants"
+                 f"{' -- Due: ' + due if due else ''}*")
+    lines.append("")
+
+    # Topic description
+    desc_html = topic.get("message", "")
+    if desc_html:
+        desc_md = html_to_markdown(desc_html).strip()
+        if desc_md:
+            lines.append("## Description")
+            lines.append("")
+            lines.append(desc_md)
+            lines.append("")
+
+    # Threads
+    if entries:
+        lines.append("## Threads")
+        lines.append("")
+        for entry in entries:
+            lines.append(_render_entry_md(entry, pmap, depth=0))
+
+    return "\n".join(lines)
+
+
 # ---- Core download logic ----
 
 def download_one_discussion(base_url, token, course_id, topic,
-                            outdir, anonymize, update, verbose):
+                            outdir, anonymize, markdown, update, verbose):
     """Download a single discussion topic and its full view.
     Returns (topic_dir, status_str) where status_str is one of:
     None (success), "skip" (--update), or an error message.
@@ -127,6 +210,13 @@ def download_one_discussion(base_url, token, course_id, topic,
             print(f"  [INFO] {participant_count} participants, "
                   f"{entry_count} top-level entries")
 
+        # Write Markdown rendering
+        if markdown:
+            md_content = render_discussion_md(topic, view)
+            md_path = os.path.join(topic_dir, "discussion.md")
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write(md_content)
+
         return topic_dir, None
 
     except Exception as e:
@@ -158,6 +248,8 @@ def main():
                     default=os.path.join("output", "Discussions"),
                     help="Output directory (default: output/Discussions)")
 
+    ap.add_argument("--markdown", action="store_true",
+                    help="Also write discussion.md with readable Markdown")
     ap.add_argument("--anonymize", action="store_true",
                     help="Replace participant PII with anonymous identifiers")
     ap.add_argument("--published-only", action="store_true",
@@ -235,6 +327,7 @@ def main():
             topic=t,
             outdir=args.outdir,
             anonymize=args.anonymize,
+            markdown=args.markdown,
             update=args.update,
             verbose=args.verbose,
         )

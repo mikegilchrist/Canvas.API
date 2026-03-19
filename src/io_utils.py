@@ -71,20 +71,32 @@ def sanitize_for_filename(text, max_len=50):
 # ---- Session prefix utilities ----
 
 def extract_session_prefix(title):
-    """Extract 'S12' or 'S06a' from 'S12: 2026-03-03 - Topic'.
+    """Extract session prefix from a Canvas title string.
+
+    Matches patterns like:
+        'S12: Topic'       -> 'S12'
+        'S06a: Topic'      -> 'S06A'
+        'S16-S17: Topic'   -> 'S16-S17'
+        'S16-17: Topic'    -> 'S16-17'
+
     Returns uppercase prefix string, or '' if not found.
     """
     if not title:
         return ""
-    m = re.match(r'^(S\d+[a-d]?)\s*:', title, re.IGNORECASE)
+    m = re.match(r'^(S\d+[a-d]?(?:-S?\d+[a-d]?)?)\s*:', title, re.IGNORECASE)
     return m.group(1).upper() if m else ""
 
 
 def session_sort_key(prefix):
-    """Return (number, letter) sort key for prefixes like 'S12', 'S06a'."""
+    """Return (number, letter) sort key for prefixes like 'S12', 'S06a', 'S16-S17'.
+
+    For range prefixes like 'S16-S17', sorts by the first session number.
+    """
     if not prefix:
         return (999, "")
-    m = re.match(r'^S(\d+)([a-d]?)$', prefix, re.IGNORECASE)
+    # Handle range prefixes: use first session for sorting
+    first = prefix.split("-")[0]
+    m = re.match(r'^S(\d+)([a-d]?)$', first, re.IGNORECASE)
     if not m:
         return (999, "")
     return (int(m.group(1)), m.group(2).lower())

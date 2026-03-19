@@ -145,6 +145,24 @@ def get_assignment(base_url, token, course_id, assignment_id, verbose=False):
     return data
 
 
+def update_assignment(base_url, token, course_id, assignment_id,
+                      verbose=False, **fields):
+    """PUT to update an assignment's properties.
+
+    Pass fields as keyword arguments, e.g.:
+        update_assignment(..., points_possible=5.0, name="New Title")
+
+    Returns the updated assignment dict.
+    """
+    url = (f"{base_url}/api/v1/courses/{course_id}"
+           f"/assignments/{assignment_id}")
+    body = {"assignment": fields}
+    if verbose:
+        print(f"[PUT] {url}  {fields}")
+    data, _headers = http_put_json(url, token, body)
+    return data
+
+
 def get_assignment_submissions(base_url, token, course_id, assignment_id,
                                verbose=False):
     """GET all submissions for an assignment with comments, rubric, history."""
@@ -219,6 +237,22 @@ def get_discussion_topic_view(base_url, token, course_id, topic_id,
     if verbose:
         print(f"[GET] {url}")
     data, _headers = http_get_json(url, token)
+    return data
+
+
+def delete_discussion_topic(base_url, token, course_id, topic_id,
+                            verbose=False):
+    """DELETE a discussion topic.
+
+    Returns the deleted topic dict (Canvas returns the object on delete).
+    Raises an exception on HTTP error (e.g. 422 if topic has submissions
+    that prevent deletion).
+    """
+    url = (f"{base_url}/api/v1/courses/{course_id}"
+           f"/discussion_topics/{topic_id}")
+    if verbose:
+        print(f"[DELETE] {url}")
+    data, _headers = http_delete(url, token)
     return data
 
 
