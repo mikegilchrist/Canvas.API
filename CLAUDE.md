@@ -103,6 +103,22 @@ The `quizzes` noun on `canvas.api.get` supports `--format csv|json|summary`
 - Classic Quizzes and New Quizzes have separate APIs; this tool targets
   Classic Quizzes
 
+## CRITICAL: Never Delete Published Assignments or Quizzes
+
+Once a quiz or assignment is published on Canvas, **NEVER delete it** to
+replace it with a new version unless explicitly instructed by the user.
+Deleting a published quiz destroys student submissions -- even temporarily
+lost work causes real harm. Instead, **update the existing quiz in place**.
+
+This applies to all Canvas objects that can accumulate student work:
+quizzes, assignments, discussion boards, pages with student interactions.
+
+- `canvas.api.upload_quiz.py` currently offers to delete existing quizzes
+  with the same session prefix. When a quiz is already published and has
+  submissions, **decline the delete** and update instead.
+- If a script lacks an update-in-place path, do the update manually via
+  the Canvas API or web UI rather than delete-and-recreate.
+
 ## Authentication
 
 Store your Canvas API token in `~/.canvas_token` (chmod 600).
