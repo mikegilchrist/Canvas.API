@@ -48,6 +48,7 @@ All prefixed with `canvas.api.` for tab-completion. Run any with `--help`.
 | `canvas.api.discussions_to_json.py`     | COURSE_ID         | Download discussion threads to JSON              |
 | `canvas.api.to_json.py`                 | COURSE_ID         | Export quiz submissions to canonical JSON        |
 | `canvas.api.quiz_summary.py`            | COURSE_ID         | Per-student summary: score, time, words, wpm     |
+| `canvas.api.update_syllabus.py`         | COURSE_ID         | View/update course Syllabus page (`syllabus_body`); `--get`, `--set PATH`, `--replace OLD:NEW` |
 
 **Unified wrappers** (dispatch to underlying scripts):
 

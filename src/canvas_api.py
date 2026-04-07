@@ -113,6 +113,30 @@ def get_courses(base_url, token, verbose=False):
     return paginated_get_all(url, token, verbose=verbose)
 
 
+def get_syllabus_body(base_url, token, course_id, verbose=False):
+    """GET the HTML syllabus_body for a course.
+
+    Canvas's Syllabus page is stored in the course's `syllabus_body` field
+    (not a normal wiki page), so it must be fetched via the course endpoint
+    with `include[]=syllabus_body`.
+    """
+    url = (f"{base_url}/api/v1/courses/{course_id}"
+           f"?include[]=syllabus_body")
+    if verbose:
+        print(f"  [GET] {url}")
+    data, _ = http_get_json(url, token)
+    return data.get("syllabus_body", "")
+
+
+def update_syllabus_body(base_url, token, course_id, body, verbose=False):
+    """PUT new HTML syllabus_body for a course. Returns updated course dict."""
+    url = f"{base_url}/api/v1/courses/{course_id}"
+    if verbose:
+        print(f"  [PUT] {url}")
+    data, _ = http_put_json(url, token, {"course": {"syllabus_body": body}})
+    return data
+
+
 # ---- Assignments ----
 
 def get_assignment_groups(base_url, token, course_id, verbose=False):
@@ -253,6 +277,54 @@ def delete_discussion_topic(base_url, token, course_id, topic_id,
     if verbose:
         print(f"[DELETE] {url}")
     data, _headers = http_delete(url, token)
+    return data
+
+
+def post_discussion_entry_reply(base_url, token, course_id, topic_id,
+                                entry_id, message, verbose=False):
+    """POST a reply to a specific discussion entry.
+
+    message: HTML string for the reply body.
+    Returns the created entry dict.
+    """
+    url = (f"{base_url}/api/v1/courses/{course_id}"
+           f"/discussion_topics/{topic_id}/entries/{entry_id}/replies")
+    body = {"message": message}
+    if verbose:
+        print(f"[POST] {url}")
+    data, _headers = http_post_json(url, token, body)
+    return data
+
+
+def update_discussion_entry(base_url, token, course_id, topic_id,
+                            entry_id, message, verbose=False):
+    """PUT an updated message to an existing discussion entry.
+
+    message: full HTML string (replaces existing content).
+    Returns the updated entry dict.
+    """
+    url = (f"{base_url}/api/v1/courses/{course_id}"
+           f"/discussion_topics/{topic_id}/entries/{entry_id}")
+    body = {"message": message}
+    if verbose:
+        print(f"[PUT] {url}")
+    data, _headers = http_put_json(url, token, body)
+    return data
+
+
+def post_submission_comment(base_url, token, course_id, assignment_id,
+                            user_id, comment, verbose=False):
+    """POST a comment on a student's assignment submission.
+
+    comment: plain text string for the comment body.
+    Returns the submission dict.
+    """
+    url = (f"{base_url}/api/v1/courses/{course_id}"
+           f"/assignments/{assignment_id}/submissions/{user_id}")
+    body = {"comment": {"text_comment": comment}}
+    if verbose:
+        print(f"[PUT] {url}")
+    data, _headers = http_put_json(url, token, body)
     return data
 
 

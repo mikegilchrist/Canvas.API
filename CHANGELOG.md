@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-04-07 — Syllabus page update support
+- Added `get_syllabus_body()` and `update_syllabus_body()` to `src/canvas_api.py`.
+  Canvas's Syllabus page lives in the course object's `syllabus_body`
+  field (not a wiki page), so it needs `include[]=syllabus_body` on GET
+  and `course[syllabus_body]` on PUT.
+- New CLI: `src/canvas.api.update_syllabus.py` with `--get`, `--set PATH`,
+  and `--replace OLD:NEW` (repeatable literal substring replacement).
+- Documented in `CLAUDE.md`.
+
 ## 2026-02-02 — Canvas API quiz export updates
 - Added `canvasapi` helper example to test `include[]` parameters: `canvasapi/example.py`.
 - Requested additional include parameters when fetching submission questions to surface student answers when permitted: updated `modular/src/canvas_api.py` (`submission_answers`, `submission_question_details`).
