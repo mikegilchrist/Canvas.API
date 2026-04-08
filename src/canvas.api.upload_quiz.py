@@ -57,7 +57,8 @@ import zipfile
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from canvas_api import delete_quiz, get_quizzes, update_quiz, upload_qti_zip
+from canvas_api import (delete_quiz, get_assignment_groups, get_quizzes,
+                        update_quiz, upload_qti_zip)
 from io_utils import extract_session_prefix, load_profile, read_token, session_sort_key
 
 
@@ -135,6 +136,12 @@ def main():
                     help="Path to the QTI zip file")
     ap.add_argument("--publish", action="store_true",
                     help="Publish the quiz after upload")
+    ap.add_argument("--group", default="Quizzes",
+                    help="Assignment group to place the new quiz in: either "
+                         "an integer group ID or a group name (default: "
+                         "'Quizzes'). Canvas's content migration imports new "
+                         "quizzes into 'Imported Assignments' by default; "
+                         "this flag moves them to the right group.")
     ap.add_argument("--yes", "-y", action="store_true",
                     help="Auto-confirm deletion of existing quiz with same "
                          "session prefix")
@@ -269,6 +276,33 @@ def main():
         print(f"Position: {target_pos}")
     except Exception as e:
         print(f"[WARN] Could not set position: {e}", file=sys.stderr)
+
+    # Move to the requested assignment group (default: 'Quizzes').
+    # Canvas's content migration creates new assignments in 'Imported
+    # Assignments' by default; we resolve --group to a group ID and update
+    # the quiz's underlying assignment to put it in the right place.
+    if args.group:
+        try:
+            group_id = int(args.group)
+        except ValueError:
+            groups = get_assignment_groups(base_url, token, args.course_id,
+                                            verbose=args.verbose)
+            match = next((g for g in groups if g["name"] == args.group), None)
+            if not match:
+                print(f"[WARN] No assignment group named {args.group!r}; "
+                      f"leaving quiz in default group.", file=sys.stderr)
+                group_id = None
+            else:
+                group_id = match["id"]
+        if group_id:
+            try:
+                update_quiz(base_url, token, args.course_id, new_quiz_id,
+                            verbose=args.verbose,
+                            assignment_group_id=group_id)
+                print(f"Group   : {args.group} (id={group_id})")
+            except Exception as e:
+                print(f"[WARN] Could not move to group {args.group!r}: {e}",
+                      file=sys.stderr)
 
     # Publish if requested.
     if args.publish:

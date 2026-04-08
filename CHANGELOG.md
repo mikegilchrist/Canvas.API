@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-04-08 — Gradebook fetcher + upload_quiz group placement
+- New CLI: `src/canvas.api.fetch_gradebook.py` builds a Canvas-format
+  gradebook CSV via the API (per-course grade export is not exposed via
+  the Reports API; this fills that gap). Uses bulk
+  `students/submissions?student_ids[]=all` for efficiency.
+- `src/canvas.api.upload_quiz.py`: added `--group GROUP_ID_OR_NAME`
+  (default `Quizzes`). Canvas's content migration places imported quizzes
+  in `Imported Assignments` by default; this flag moves the new quiz to
+  the right group automatically after upload.
+
 ## 2026-04-07 — Syllabus page update support
 - Added `get_syllabus_body()` and `update_syllabus_body()` to `src/canvas_api.py`.
   Canvas's Syllabus page lives in the course object's `syllabus_body`
