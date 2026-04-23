@@ -50,6 +50,7 @@ All prefixed with `canvas.api.` for tab-completion. Run any with `--help`.
 | `canvas.api.quiz_summary.py`            | COURSE_ID         | Per-student summary: score, time, words, wpm     |
 | `canvas.api.update_syllabus.py`         | COURSE_ID         | View/update course Syllabus page (`syllabus_body`); `--get`, `--set PATH`, `--replace OLD:NEW` |
 | `canvas.api.fetch_gradebook.py`         | COURSE_ID         | Fetch gradebook via API and write CSV in Canvas-export format; `--groups`, `-o PATH` |
+| `canvas.api.upload_gradebook.py`        | COURSE_ID CSV     | Upload grades from Canvas-format gradebook CSV; `--create-missing`, `--group-id ID` |
 
 **Unified wrappers** (dispatch to underlying scripts):
 
@@ -104,6 +105,37 @@ The `quizzes` noun on `canvas.api.get` supports `--format csv|json|summary`
   instructors -- Student Analysis CSV bypasses this
 - Classic Quizzes and New Quizzes have separate APIs; this tool targets
   Classic Quizzes
+
+## CATME Grade Upload Workflow
+
+After processing a CATME survey export, upload the resulting
+`*.for.canvas.upload.csv` to Canvas with:
+
+```bash
+canvas.api.upload_gradebook.py COURSE_ID path/to/catme.for.canvas.upload.csv \
+    --create-missing --group-id CATME_GROUP_ID
+```
+
+Always do a `--dry-run` first to confirm assignment creation and grade counts.
+
+**Course-specific constants (EEB403/EEB466 Cancer Evolution 2026):**
+- Course ID: `244286`
+- CATME assignment group ID: `595699`
+- Token file: `~/.api/canvas_token` (config: `~/.canvas.api.conf`)
+
+**What the script does:**
+1. Reads the CSV (skips "Points Possible" row and empty-grade rows)
+2. Matches CSV column names to Canvas assignments by name (exact, case-insensitive)
+3. With `--create-missing`: creates any unmatched assignment in the specified
+   group with `points_possible = 1.0` and `submission_types = ["none"]`
+4. PUTs each non-empty grade to the assignment's submission for that student
+
+**CSV format:** Standard Canvas gradebook export format with columns:
+`Student, ID, SIS User ID, SIS Login ID, Section, <assignment cols...>`
+The Canvas user ID in the `ID` column is used for student lookup.
+
+A symlink to this script lives in the Cancer.Evolution repo at:
+`2026/CATME/Survey.Results/Exports/canvas.api.upload_gradebook.py`
 
 ## CRITICAL: Never Delete Published Assignments or Quizzes
 
