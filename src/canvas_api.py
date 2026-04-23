@@ -58,6 +58,23 @@ def get_submission_questions(base_url, token, submission_id, verbose=False):
     return paginated_get_all_list_key(url, token, "quiz_submission_questions", verbose=verbose)
 
 
+def get_quiz_submission_events(base_url, token, course_id, quiz_id,
+                               submission_id, verbose=False):
+    """GET quiz submission events for a single quiz submission.
+
+    Returns events with client_timestamp, event_type, and event_data.
+    Event types: session_started, page_blurred, page_focused, question_answered.
+    page_blurred/page_focused track tab switches; question_answered records
+    each answer change with the answer text at that moment.
+    """
+    url = (f"{base_url}/api/v1/courses/{course_id}/quizzes/{quiz_id}"
+           f"/submissions/{submission_id}/events?per_page=100")
+    if verbose:
+        print(f"  [GET] {url}")
+    return paginated_get_all_list_key(url, token, "quiz_submission_events",
+                                     verbose=False)
+
+
 # ---- Quiz Reports (Student Analysis / Item Analysis) ----
 
 def create_quiz_report(base_url, token, course_id, quiz_id,
