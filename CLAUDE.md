@@ -52,6 +52,33 @@ All prefixed with `canvas.api.` for tab-completion. Run any with `--help`.
 | `canvas.api.fetch_gradebook.py`         | COURSE_ID         | Fetch gradebook via API and write CSV in Canvas-export format; `--groups`, `-o PATH` |
 | `canvas.api.upload_gradebook.py`        | COURSE_ID CSV     | Upload grades from Canvas-format gradebook CSV; `--create-missing`, `--group-id ID` |
 
+**Browser script** (needs an interactive login, NOT a token):
+
+| Script                    | Usage                              | Purpose                                    |
+|---------------------------|------------------------------------|--------------------------------------------|
+| `canvas.api.browser.py`   | `login`                            | Sign in by hand once; session is reused    |
+|                           | `status`                           | Is the saved session still authenticated?  |
+|                           | `rollcall COURSE_ID [--settings]`  | Launch the Attendance (Roll Call) LTI tool, capture it, and diff the course's assignments before/after |
+|                           | `open URL`                         | Navigate, screenshot, dump every frame's text |
+
+Use this **only** for what the REST API cannot reach -- LTI tools and UI-only
+settings. Everything else belongs in an API script: faster, scriptable, and
+not dependent on a session.
+
+Two things learned the hard way and encoded in the script:
+
+- A persistent Playwright profile directory is **not enough** to keep a Canvas
+  login. `canvas_session` and `_normandy_session` are session cookies, which
+  Chromium discards on close -- the profile comes back with cookies from
+  `cas.tennessee.edu` and none from Canvas. The login is carried by
+  `state.json` inside the profile, written with `storage_state()`.
+- Roll Call creates its gradebook assignment on the **first mark**, not on
+  launch. Launching the tab is therefore safe and non-mutating.
+
+Auth lives in `~/.canvas_browser/` (mode 0700), outside every repository.
+It is a credential store: never commit or sync it. Captures land in `output/`
+and contain student names and photos.
+
 **Unified wrappers** (dispatch to underlying scripts):
 
 | Script              | Usage                                                 | Purpose                          |
