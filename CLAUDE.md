@@ -51,6 +51,18 @@ All prefixed with `canvas.api.` for tab-completion. Run any with `--help`.
 | `canvas.api.update_syllabus.py`         | COURSE_ID         | View/update course Syllabus page (`syllabus_body`); `--get`, `--set PATH`, `--replace OLD:NEW` |
 | `canvas.api.fetch_gradebook.py`         | COURSE_ID         | Fetch gradebook via API and write CSV in Canvas-export format; `--groups`, `-o PATH` |
 | `canvas.api.upload_gradebook.py`        | COURSE_ID CSV     | Upload grades from Canvas-format gradebook CSV; `--create-missing`, `--group-id ID` |
+| `canvas.api.download_pages.py`          | COURSE_ID         | Download session pages as HTML/Markdown/JSON; `--session PREFIX`, `--outdir DIR`. **Only sees `S12:`-style titles** -- see below |
+
+`download_pages.py` filters every page through
+`extract_session_prefix()` (`io_utils.py`), which matches only titles of the
+form `S<n>[a-d]:` / `S16-S17:`. A course whose pages are named `Meeting 1: ...`
+(e.g. LS520) yields "No session pages found matching filters" no matter what
+flags you pass -- this is the filter, not an empty course. Query
+`/courses/:id/pages` directly for those.
+
+The table above is not exhaustive; `src/` also holds `update_lecture_page.py`,
+`upload_files.py`, `publish_quiz.py`, `check_db_points.py`, `curve_exam.py`,
+`quiz_submission_events.py`, and `recreate_groups.py`.
 
 **Unified wrappers** (dispatch to underlying scripts):
 
@@ -105,6 +117,75 @@ The `quizzes` noun on `canvas.api.get` supports `--format csv|json|summary`
   instructors -- Student Analysis CSV bypasses this
 - Classic Quizzes and New Quizzes have separate APIs; this tool targets
   Classic Quizzes
+- Announcements 404 on `/courses/:id/discussion_topics/:id`; fetch them via
+  `/announcements?context_codes[]=course_<id>` (needs `start_date`/`end_date`
+  to reach back more than a couple of weeks)
+- `discussion_checkpoints` is NOT listed by `/courses/:id/features`; query
+  `/accounts/<account_id>/features/flags/discussion_checkpoints`. UTK's root
+  account has it `allowed_on` (on unless a course opts out)
+- Claude Code's sandbox proxy allows GETs to `utk.instructure.com` but denies
+  writes; PUT/POST/DELETE need the sandbox disabled
+
+## Discussion Checkpoints: GraphQL only
+
+Checkpoints split a graded discussion into two sub-assignments with separate
+due dates -- `reply_to_topic` (the initial post) and `reply_to_entry`
+(replies to classmates). **The REST API cannot configure them.**
+
+`PUT /api/v1/courses/:id/discussion_topics/:id` accepts `checkpoints[]` and
+`reply_to_entry_required_count`, returns **200 with no error**, and silently
+ignores both. Do not trust the 200 -- always re-read the object.
+
+Use `POST /api/graphql` with `updateDiscussionTopic`:
+
+```
+input: {
+  discussionTopicId: "<topic id>",
+  setCheckpoints: true,
+  assignment: { setAssignment: true, forCheckpoints: true,
+                gradingType: "points", pointsPossible: 10.0,
+                assignmentGroupId: "<group id>" },
+  checkpoints: [
+    {checkpointLabel: reply_to_topic, pointsPossible: 5.0,
+     dates: [{type: everyone, dueAt: "2026-08-28T01:00:00Z"}]},
+    {checkpointLabel: reply_to_entry, pointsPossible: 5.0, repliesRequired: 2,
+     dates: [{type: everyone, dueAt: "2026-08-31T11:30:00Z"}]}
+  ]
+}
+```
+
+Three requirements, each of which fails quietly or confusingly if missed:
+
+1. **`assignment: {forCheckpoints: true}` is mandatory.** Without it the
+   mutation returns `errors: null` and does create the two sub-assignments,
+   but their points and dates persist as `0.0` and `null`. This is the
+   trap -- `setCheckpoints: true` alone looks like it worked.
+2. `dates[].type` is NON_NULL (`DiscussionCheckpointDate`); the enum is
+   `everyone` | `override`. Omitting it is a schema error.
+3. Pass `pointsPossible` on the parent assignment too, or it stays `0`.
+
+Verify by re-reading the assignment with `?include[]=checkpoints`, not from
+the mutation's own response -- it can echo stale values in the same payload.
+
+**Checkpoints cannot be retrofitted.** Canvas rejects them with
+`"Checkpoints cannot be enabled after replies have been made."` once a
+discussion has any student reply. Decide before publishing a graded
+discussion; otherwise the only option is a single plain `due_at` on the
+parent assignment.
+
+Enabling checkpoints in the Canvas web UI only sets
+`reply_to_entry_required_count` -- dates and points still need configuring.
+
+## File Upload: overwrite mints a NEW file id
+
+`on_duplicate: overwrite` does not reuse the existing file id. Canvas creates
+a new file record; the old id becomes an alias that still resolves to the new
+content, and module items are rewired automatically. Links keep working, but
+**any script that records a numeric file id will drift** after an overwrite.
+
+`canvas_http.http_post_multipart_no_auth(url, fields, files=...)` takes
+`files` as a **dict** -- `{name: (filename, bytes, content_type)}` -- not a
+list of tuples.
 
 ## CATME Grade Upload Workflow
 

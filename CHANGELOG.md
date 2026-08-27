@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-08-27 — Discussion checkpoints and file-overwrite notes (docs only)
+- `CLAUDE.md`: documented that **discussion checkpoints cannot be configured
+  over REST**. `PUT /discussion_topics/:id` accepts `checkpoints[]` and
+  `reply_to_entry_required_count`, returns 200 with no error, and silently
+  drops them. Use `POST /api/graphql` `updateDiscussionTopic`, and note that
+  `assignment: {forCheckpoints: true}` is required or the sub-assignments get
+  created with null dates and zero points while still reporting success.
+- Recorded that checkpoints cannot be retrofitted: Canvas refuses with
+  "Checkpoints cannot be enabled after replies have been made."
+- Recorded that `on_duplicate: overwrite` file upload mints a NEW file id
+  (the old id aliases to it and module items rewire), so any script that
+  stores a numeric file id will drift.
+- Corrected the `http_post_multipart_no_auth` `files=` signature in the docs:
+  it takes a dict `{name: (filename, bytes, ctype)}`, not a list of tuples.
+- Documented `download_pages.py`'s `S12:`-only title filter, which makes it
+  report "No session pages found" for courses using `Meeting N:` page names.
+- Added `download_pages.py` to the CLI table and noted the table is partial.
+
+No code changes; all findings verified against UTK Canvas course 265826.
+
 ## 2026-04-08 — Gradebook fetcher + upload_quiz group placement
 - New CLI: `src/canvas.api.fetch_gradebook.py` builds a Canvas-format
   gradebook CSV via the API (per-course grade export is not exposed via
