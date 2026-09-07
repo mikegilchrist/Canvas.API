@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-09-07 — `submissions_to_files.py` 1.1.0: stop losing re-submitted files
+
+**Data-loss fix.** `submission["attachments"]` holds only the LATEST attempt.
+Canvas replaces the attachment list on every re-submission, so a file uploaded
+in attempt 1 and not re-uploaded in attempt 2 was never downloaded -- while
+remaining present in Canvas and visible in SpeedGrader. The script already
+saved `submission_history` (which carries every attempt) into `submission.json`
+but never read it back.
+
+Found in BIOL240 F.2026 HW01: a team uploaded homework + charter at 13:11, then
+re-submitted at 14:29 with only the meeting minutes. The download kept the
+minutes alone and the team appeared to have submitted no work at all. Replayed
+over that assignment's 31 saved submissions, the fix recovers **9 files across
+3 students** -- 82 files downloaded before, 91 now.
+
+- Default is now to walk `submission_history` and download every attempt's
+  attachments, deduplicated by attachment id.
+- Files from the current attempt keep their name, order and location, so
+  callers that glob the student directory are unaffected.
+- Files present only in an earlier attempt land in
+  `superseded.attempt_<n>/` inside the student directory.
+- Each affected student is reported on stderr, not gated behind `--verbose` --
+  a later attempt that drops files needs a human decision about which attempt
+  to grade.
+- `--latest-only` restores the pre-1.1.0 behaviour, and its data loss.
+
 ## 2026-08-27 — Discussion checkpoints and file-overwrite notes (docs only)
 - `CLAUDE.md`: documented that **discussion checkpoints cannot be configured
   over REST**. `PUT /discussion_topics/:id` accepts `checkpoints[]` and

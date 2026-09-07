@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       submissions_to_files.py
-# Version:      1.0.0
+# Version:      1.1.0
 # Date:         2026-02-20
+# Revised:      2026-09-07
 # Purpose:      Download Canvas assignment submissions (files, rubric scores,
 #               comments, submission history) -- the same data visible in
 #               SpeedGrader.
@@ -10,7 +11,7 @@
 # Usage:        submissions_to_files.py COURSE_ID [ASSIGNMENT_ID] --base-url URL
 #                   [--token TOKEN | --token-file FILE]
 #                   [--group NAME] [--outdir DIR]
-#                   [--anonymize] [--update]
+#                   [--anonymize] [--latest-only] [--update]
 #                   [--dry-run] [--verbose] [--help]
 #
 # Input:        Canvas API token + course_id (+ optional assignment_id)
@@ -23,10 +24,20 @@
 #   --group NAME            Filter by assignment group name (case-insensitive)
 #   --outdir DIR            Output directory (default: output/Assignments)
 #   --anonymize             Replace student PII with anonymous identifiers
+#   --latest-only           Only the latest attempt's files (see note below)
 #   -u, --update            Skip assignments whose output directory exists
 #   -n, --dry-run           Show what would be done without making changes
 #   -v, --verbose           Show detailed output
 #   -h, --help              Show this help message
+#
+# Note on attempts:
+#   Canvas REPLACES a submission's attachment list on every re-submission, so
+#   submission["attachments"] shows the latest attempt only.  A file uploaded
+#   in attempt 1 and not re-uploaded in attempt 2 is absent from it while still
+#   being present in Canvas and visible in SpeedGrader.  By default this script
+#   also walks submission_history and saves such files under
+#   superseded.attempt_<n>/, warning on stderr for each affected student.
+#   --latest-only restores the pre-1.1.0 behaviour, and its data loss.
 #
 # Requirements:
 #   - Python 3.7+
@@ -94,7 +105,8 @@ def anonymize_submission(sub, student_label):
 # ---- Core download logic ----
 
 def download_one_assignment(base_url, token, course_id, assignment,
-                            outdir, anonymize, update, verbose):
+                            outdir, anonymize, update, verbose,
+                            latest_only=False):
     """Download submissions for a single assignment.
     Returns (assignment_dir, status_str) where status_str is one of:
     None (success), "skip" (--update), or an error message.
@@ -162,6 +174,7 @@ def download_one_assignment(base_url, token, course_id, assignment,
 
         # Process each student
         file_count = 0
+        dropped = []          # (student_dir, current_attempt, [filenames])
         for i, sub in enumerate(submitted, 1):
             sdir_name = student_slug(sub, i, anonymize)
             sdir = os.path.join(assignment_dir, sdir_name)
@@ -174,19 +187,59 @@ def download_one_assignment(base_url, token, course_id, assignment,
                 sub_data = sub
             _write_json(os.path.join(sdir, "submission.json"), sub_data)
 
-            # Download file attachments
-            attachments = sub.get("attachments", [])
-            for att in attachments:
+            # Download file attachments.
+            #
+            # sub["attachments"] holds ONLY the latest attempt.  When a student
+            # re-submits, Canvas opens a new attempt whose attachment list
+            # REPLACES the previous one, so a file uploaded in attempt 1 and
+            # not re-uploaded in attempt 2 never appears here -- even though it
+            # is still in Canvas and still visible in SpeedGrader.
+            #
+            # Observed live (BIOL240 F.2026 HW01): a team uploaded homework +
+            # charter at 13:11, then re-submitted at 14:29 with only the
+            # meeting minutes.  The homework never reached the download and the
+            # team appeared to have submitted no work at all.
+            #
+            # submission_history carries every attempt, so walk it too and file
+            # anything superseded under superseded.attempt_<n>/.  Files from the
+            # current attempt keep their names and location, so callers that
+            # glob the student directory see no change.
+            current = sub.get("attachments") or []
+            seen_ids = {a.get("id") for a in current}
+
+            plan = [(None, att) for att in current]
+            superseded_names = []
+            if not latest_only:
+                for entry in (sub.get("submission_history") or []):
+                    n = entry.get("attempt")
+                    if n is not None and n == sub.get("attempt"):
+                        continue          # this is the current attempt
+                    for att in (entry.get("attachments") or []):
+                        if att.get("id") in seen_ids:
+                            continue      # carried forward, already queued
+                        seen_ids.add(att.get("id"))
+                        plan.append((n, att))
+                        superseded_names.append(
+                            att.get("display_name")
+                            or att.get("filename") or "file")
+
+            for attempt_no, att in plan:
                 att_url = att.get("url")
                 att_name = att.get("filename") or att.get("display_name",
                                                            "file")
                 if not att_url:
                     continue
-                dest = os.path.join(sdir, att_name)
+                if attempt_no is None:
+                    tdir = sdir
+                else:
+                    tdir = os.path.join(sdir,
+                                        f"superseded.attempt_{attempt_no}")
+                    os.makedirs(tdir, exist_ok=True)
+                dest = os.path.join(tdir, att_name)
                 # Avoid overwriting if duplicate filenames
                 if os.path.exists(dest):
                     base, ext = os.path.splitext(att_name)
-                    dest = os.path.join(sdir,
+                    dest = os.path.join(tdir,
                                         f"{base}_{att['id']}{ext}")
                 try:
                     data = http_get_raw(att_url)
@@ -199,9 +252,23 @@ def download_one_assignment(base_url, token, course_id, assignment,
                     print(f"    [WARN] Failed to download {att_name}: {e}",
                           file=sys.stderr)
 
+            if superseded_names:
+                dropped.append((sdir_name, sub.get("attempt"),
+                                sorted(superseded_names)))
+
         if verbose:
             print(f"  [INFO] {len(submitted)} submissions, "
                   f"{file_count} files downloaded")
+
+        # A later attempt that drops files needs a human decision about which
+        # attempt to grade, so say so loudly rather than only on --verbose.
+        if dropped:
+            print(f"  [WARN] {len(dropped)} submission(s) have files only in "
+                  f"an earlier attempt; recovered under superseded.attempt_*/:",
+                  file=sys.stderr)
+            for sdir_name, attempt_no, names in dropped:
+                print(f"           {sdir_name} (now on attempt {attempt_no}): "
+                      f"{', '.join(names)}", file=sys.stderr)
 
         return assignment_dir, None
 
@@ -262,6 +329,13 @@ def main():
 
     ap.add_argument("--anonymize", action="store_true",
                     help="Replace student PII with anonymous identifiers")
+    ap.add_argument("--latest-only", action="store_true",
+                    help="Download only the latest attempt's files. Canvas "
+                         "replaces the attachment list on each re-submission, "
+                         "so this silently drops files a student uploaded in "
+                         "an earlier attempt and did not re-upload. Default "
+                         "is to fetch every attempt, putting superseded files "
+                         "in superseded.attempt_<n>/")
     ap.add_argument("-u", "--update", action="store_true",
                     help="Skip assignments whose output directory exists")
 
@@ -346,6 +420,7 @@ def main():
             anonymize=args.anonymize,
             update=args.update,
             verbose=args.verbose,
+            latest_only=args.latest_only,
         )
 
         if err == "skip":
