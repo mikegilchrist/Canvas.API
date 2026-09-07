@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-09-07 — new `send_message.py`: Canvas Conversations from the CLI
+
+Sends a Canvas Conversations message over the token owner's name, so course
+correspondence stays in Canvas instead of email. `--dry-run` renders the body
+and the fully resolved recipient list and sends nothing; an unresolved
+recipient aborts the send rather than letting Canvas guess.
+
+Two API behaviours found while writing it, both worth knowing before the next
+script:
+
+- **`GET /users/:id` returns 404 for an instructor token.** There is no
+  account-level user read. Resolve a user through
+  `GET /courses/:course_id/users/:id`, which also confirms the person is in the
+  course and returns their enrollment type.
+- **`group_conversation: true` does not guarantee one thread.** Given a
+  `group_<id>` recipient plus one individual, Canvas expanded the group and
+  created a separate two-person conversation per recipient (5 recipients ->
+  5 threads), despite `bulk_message: false`. The POST response is an array of
+  the conversations actually created; read it rather than assuming. The
+  script's MODE line now says what was *requested* and warns that Canvas may
+  split it.
+
+Also note `http_get_json` / `http_post_json` return `(data, headers)`, not
+`data` — the tuple is easy to call `.get()` on by mistake.
+
 ## 2026-09-07 — `submissions_to_files.py` 1.1.0: stop losing re-submitted files
 
 **Data-loss fix.** `submission["attachments"]` holds only the LATEST attempt.
