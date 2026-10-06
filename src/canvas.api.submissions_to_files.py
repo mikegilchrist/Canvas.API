@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       submissions_to_files.py
-# Version:      1.1.0
+# Version:      1.2.0
 # Date:         2026-02-20
-# Revised:      2026-09-07
+# Revised:      2026-10-06
 # Purpose:      Download Canvas assignment submissions (files, rubric scores,
 #               comments, submission history) -- the same data visible in
 #               SpeedGrader.
@@ -12,6 +12,7 @@
 #                   [--token TOKEN | --token-file FILE]
 #                   [--group NAME] [--outdir DIR]
 #                   [--anonymize] [--latest-only] [--update]
+#                   [--sample N] [--seed S]
 #                   [--dry-run] [--verbose] [--help]
 #
 # Input:        Canvas API token + course_id (+ optional assignment_id)
@@ -26,6 +27,9 @@
 #   --anonymize             Replace student PII with anonymous identifiers
 #   --latest-only           Only the latest attempt's files (see note below)
 #   -u, --update            Skip assignments whose output directory exists
+#   --sample N              Download only N randomly chosen submitted
+#                           submissions per assignment (a probe)
+#   --seed S                Seed for --sample (default 0: same N each run)
 #   -n, --dry-run           Show what would be done without making changes
 #   -v, --verbose           Show detailed output
 #   -h, --help              Show this help message
@@ -52,6 +56,7 @@
 import argparse
 import json
 import os
+import random
 import sys
 
 from canvas_api import (
@@ -106,7 +111,7 @@ def anonymize_submission(sub, student_label):
 
 def download_one_assignment(base_url, token, course_id, assignment,
                             outdir, anonymize, update, verbose,
-                            latest_only=False):
+                            latest_only=False, sample=None, seed=0):
     """Download submissions for a single assignment.
     Returns (assignment_dir, status_str) where status_str is one of:
     None (success), "skip" (--update), or an error message.
@@ -129,6 +134,13 @@ def download_one_assignment(base_url, token, course_id, assignment,
         submitted = [s for s in submissions
                      if s.get("workflow_state") != "unsubmitted"
                      and s.get("submitted_at") is not None]
+
+        if sample is not None and 0 < sample < len(submitted):
+            submitted.sort(key=lambda s: s.get("user_id") or 0)
+            submitted = random.Random(seed).sample(submitted, sample)
+            print(f"  [SAMPLE] {sample} of {len(submissions)} submissions "
+                  f"(seed {seed}): user ids "
+                  f"{sorted(s.get('user_id') for s in submitted)}")
 
         if not submitted:
             if verbose:
@@ -336,6 +348,12 @@ def main():
                          "an earlier attempt and did not re-upload. Default "
                          "is to fetch every attempt, putting superseded files "
                          "in superseded.attempt_<n>/")
+    ap.add_argument("--sample", type=int, default=None, metavar="N",
+                    help="Download only N randomly chosen submitted "
+                         "submissions per assignment (a probe)")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="Seed for --sample (default 0, so repeat runs pick "
+                         "the same submissions)")
     ap.add_argument("-u", "--update", action="store_true",
                     help="Skip assignments whose output directory exists")
 
@@ -421,6 +439,8 @@ def main():
             update=args.update,
             verbose=args.verbose,
             latest_only=args.latest_only,
+            sample=args.sample,
+            seed=args.seed,
         )
 
         if err == "skip":
