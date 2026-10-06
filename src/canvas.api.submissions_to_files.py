@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       submissions_to_files.py
-# Version:      1.3.0
+# Version:      1.4.0
 # Date:         2026-02-20
 # Revised:      2026-10-06
 # Purpose:      Download Canvas assignment submissions (files, rubric scores,
@@ -30,6 +30,8 @@
 #   --sample N              Download only N randomly chosen submitted
 #                           submissions per assignment (a probe)
 #   --seed S                Seed for --sample (default 0: same N each run)
+#   --include-group NAME    Pull ONLY the named group(s)/team(s) (repeatable);
+#                           for choosing a test set on purpose.
 #   --exclude-group NAME    With --sample: never pick this group/team (repeatable).
 #                           --sample picks DISTINCT groups, since a group
 #                           submission is repeated under every member.
@@ -115,7 +117,7 @@ def anonymize_submission(sub, student_label):
 def download_one_assignment(base_url, token, course_id, assignment,
                             outdir, anonymize, update, verbose,
                             latest_only=False, sample=None, seed=0,
-                            exclude_groups=()):
+                            exclude_groups=(), include_groups=()):
     """Download submissions for a single assignment.
     Returns (assignment_dir, status_str) where status_str is one of:
     None (success), "skip" (--update), or an error message.
@@ -139,7 +141,14 @@ def download_one_assignment(base_url, token, course_id, assignment,
                      if s.get("workflow_state") != "unsubmitted"
                      and s.get("submitted_at") is not None]
 
-        if sample is not None and sample > 0:
+        if include_groups:
+            want = {g.lower() for g in include_groups}
+            submitted = [x for x in submitted
+                         if ((x.get("group") or {}).get("name") or "")
+                         .strip().lower() in want]
+            print(f"  [INCLUDE] {len(submitted)} submission(s) from "
+                  f"{', '.join(sorted(include_groups))}")
+        elif sample is not None and sample > 0:
             # one candidate per GROUP (a group submission is repeated under
             # every member), none from an excluded group
             skip = {g.lower() for g in exclude_groups}
@@ -367,6 +376,9 @@ def main():
     ap.add_argument("--sample", type=int, default=None, metavar="N",
                     help="Download only N randomly chosen submitted "
                          "submissions per assignment (a probe)")
+    ap.add_argument("--include-group", action="append", default=[],
+                    metavar="NAME", help="pull only these groups/teams "
+                    "(repeatable); no sampling")
     ap.add_argument("--exclude-group", action="append", default=[],
                     metavar="NAME", help="with --sample: never pick this "
                     "group/team (repeatable)")
@@ -461,6 +473,7 @@ def main():
             sample=args.sample,
             seed=args.seed,
             exclude_groups=args.exclude_group,
+            include_groups=args.include_group,
         )
 
         if err == "skip":
