@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       submissions_to_files.py
-# Version:      1.2.0
+# Version:      1.3.0
 # Date:         2026-02-20
 # Revised:      2026-10-06
 # Purpose:      Download Canvas assignment submissions (files, rubric scores,
@@ -30,6 +30,9 @@
 #   --sample N              Download only N randomly chosen submitted
 #                           submissions per assignment (a probe)
 #   --seed S                Seed for --sample (default 0: same N each run)
+#   --exclude-group NAME    With --sample: never pick this group/team (repeatable).
+#                           --sample picks DISTINCT groups, since a group
+#                           submission is repeated under every member.
 #   -n, --dry-run           Show what would be done without making changes
 #   -v, --verbose           Show detailed output
 #   -h, --help              Show this help message
@@ -111,7 +114,8 @@ def anonymize_submission(sub, student_label):
 
 def download_one_assignment(base_url, token, course_id, assignment,
                             outdir, anonymize, update, verbose,
-                            latest_only=False, sample=None, seed=0):
+                            latest_only=False, sample=None, seed=0,
+                            exclude_groups=()):
     """Download submissions for a single assignment.
     Returns (assignment_dir, status_str) where status_str is one of:
     None (success), "skip" (--update), or an error message.
@@ -135,12 +139,24 @@ def download_one_assignment(base_url, token, course_id, assignment,
                      if s.get("workflow_state") != "unsubmitted"
                      and s.get("submitted_at") is not None]
 
-        if sample is not None and 0 < sample < len(submitted):
-            submitted.sort(key=lambda s: s.get("user_id") or 0)
-            submitted = random.Random(seed).sample(submitted, sample)
-            print(f"  [SAMPLE] {sample} of {len(submissions)} submissions "
-                  f"(seed {seed}): user ids "
-                  f"{sorted(s.get('user_id') for s in submitted)}")
+        if sample is not None and sample > 0:
+            # one candidate per GROUP (a group submission is repeated under
+            # every member), none from an excluded group
+            skip = {g.lower() for g in exclude_groups}
+            byg = {}
+            for sub in sorted(submitted, key=lambda x: x.get("user_id") or 0):
+                gname = ((sub.get("group") or {}).get("name") or "").strip()
+                if gname.lower() in skip:
+                    continue
+                byg.setdefault(gname or f"user{sub.get('user_id')}", sub)
+            keys = sorted(byg)
+            pick = (random.Random(seed).sample(keys, sample)
+                    if sample < len(keys) else keys)
+            submitted = [x for x in submitted
+                         if (x.get("group") or {}).get("name", "").strip() in pick
+                         or f"user{x.get('user_id')}" in pick]
+            print(f"  [SAMPLE] {len(pick)} group(s) of {len(keys)} eligible "
+                  f"(seed {seed}): {', '.join(pick)}")
 
         if not submitted:
             if verbose:
@@ -351,6 +367,9 @@ def main():
     ap.add_argument("--sample", type=int, default=None, metavar="N",
                     help="Download only N randomly chosen submitted "
                          "submissions per assignment (a probe)")
+    ap.add_argument("--exclude-group", action="append", default=[],
+                    metavar="NAME", help="with --sample: never pick this "
+                    "group/team (repeatable)")
     ap.add_argument("--seed", type=int, default=0,
                     help="Seed for --sample (default 0, so repeat runs pick "
                          "the same submissions)")
@@ -441,6 +460,7 @@ def main():
             latest_only=args.latest_only,
             sample=args.sample,
             seed=args.seed,
+            exclude_groups=args.exclude_group,
         )
 
         if err == "skip":
