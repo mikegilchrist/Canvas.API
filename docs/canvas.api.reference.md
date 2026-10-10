@@ -451,11 +451,11 @@ announcements, calendar events, discussion topics, modules, module items, rubric
   `user_id`, so no name matching. The assignment id in the header is what matches columns.
   Observed: an UNPUBLISHED assignment was not offered in the import's column-matching list;
   it appeared once published.
-- **Post policy vs imported grades is UNRESOLVED:** the docs searched (community guides on
-  posting grades / manual policy) say a manual policy keeps entered grades hidden until
-  posted, but none covers CSV import. After importing into a `post_manually: true`
-  assignment, every scored submission showed a non-null `posted_at`. Whether the import
-  posted them or they were posted by hand afterwards was not established. After any import
-  into a manual-post column, read `posted_at` for every submission before telling students.
-  A manual policy must be set BEFORE grades are entered; changing it later does not hide
-  grades already posted.
+- **Post policy vs imported grades (BIOL240 CATME II, 2026-10-10):** one column was
+  `post_manually: false` and one `true`. After one CSV import both showed non-null `posted_at`,
+  but the manual column's stamp was 82 s later than the automatic one's, and the instructor
+  confirmed releasing it by hand. So the import itself appears to respect a manual policy
+  (the grades sat hidden until released), though this rests on one case and the instructor's
+  recollection, not on the docs (none found covering import). Still read `posted_at` for every
+  submission before telling students. A manual policy must be set BEFORE grades are entered;
+  changing it later does not hide grades already posted.

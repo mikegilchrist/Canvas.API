@@ -5,8 +5,7 @@
 Three Canvas behaviours found importing BIOL240 CATME II scores, recorded under
 "Key Quirks" in `docs/canvas.api.reference.md`: submission grade writes that
 403 for an instructor token, the CSV import's header format and publish
-requirement, and the unresolved question of whether an import posts grades
-into a manual-post column.
+requirement, and evidence (one case) that an import respects a manual-post policy.
 
 ## 2026-09-07 — new `send_message.py`: Canvas Conversations from the CLI
 
