@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-10 -- docs: grade-write 403, gradebook CSV import, post policy
+
+Three Canvas behaviours found importing BIOL240 CATME II scores, recorded under
+"Key Quirks" in `docs/canvas.api.reference.md`: submission grade writes that
+403 for an instructor token, the CSV import's header format and publish
+requirement, and the unresolved question of whether an import posts grades
+into a manual-post column.
+
 ## 2026-09-07 — new `send_message.py`: Canvas Conversations from the CLI
 
 Sends a Canvas Conversations message over the token owner's name, so course

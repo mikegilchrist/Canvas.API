@@ -439,3 +439,23 @@ announcements, calendar events, discussion topics, modules, module items, rubric
   accordingly.
 - **`submission_data` location:** Not in Quiz Submissions API. Found in Assignment Submissions API
   via `include[]=submission_history`.
+- **Grade writes can 403 while everything else works (BIOL240, 2026-10-10):** with the
+  instructor token (Primary_Instructor), `PUT /courses/{c}/assignments/{a}/submissions/{uid}`
+  (`submission[posted_grade]`) and `POST .../submissions/update_grades` both returned
+  `403 {"errors":[{"message":"user not authorized to perform that action"}]}`, while all reads
+  and `PUT /assignments/{a}` (e.g. `assignment[published]`) succeeded. Publishing the
+  assignment did not change it; no grading period exists; cause not found. The Canvas UI
+  gradebook CSV import worked for the same grades. Do not diagnose by retrying live writes.
+- **Gradebook CSV import format:** header columns `Student, ID, SIS Login ID, Section,
+  <assignment name> (<assignment_id>)`, then a `Points Possible` row. `ID` is the Canvas
+  `user_id`, so no name matching. The assignment id in the header is what matches columns.
+  Observed: an UNPUBLISHED assignment was not offered in the import's column-matching list;
+  it appeared once published.
+- **Post policy vs imported grades is UNRESOLVED:** the docs searched (community guides on
+  posting grades / manual policy) say a manual policy keeps entered grades hidden until
+  posted, but none covers CSV import. After importing into a `post_manually: true`
+  assignment, every scored submission showed a non-null `posted_at`. Whether the import
+  posted them or they were posted by hand afterwards was not established. After any import
+  into a manual-post column, read `posted_at` for every submission before telling students.
+  A manual policy must be set BEFORE grades are entered; changing it later does not hide
+  grades already posted.
