@@ -110,3 +110,17 @@ dmypy.json
 .pyre/
 .ruff_cache/
 # === end python ===
+
+# === sandbox / editor cruft (Claude Code sandbox masks these with /dev/null) ===
+/.bash_profile
+/.bashrc
+/.profile
+/.zprofile
+/.zshrc
+/.gitconfig
+/.gitmodules
+/.ripgreprc
+/.mcp.json
+/.idea
+/.vscode
+/.claude/
