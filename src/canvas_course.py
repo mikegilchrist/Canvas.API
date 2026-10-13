@@ -57,14 +57,40 @@ class CourseConfigError(Exception):
     """Raised when no usable course configuration can be resolved."""
 
 
-def find_config(start=None):
-    """Walk up from `start` (default cwd) and return the first canvas.course.json
-    path, or None."""
-    d = pathlib.Path(start or os.getcwd()).resolve()
+def _walk_up(start):
+    d = pathlib.Path(start).resolve()
     for p in [d] + list(d.parents):
         cand = p / CONFIG_NAME
         if cand.is_file():
             return cand
+    return None
+
+
+_OVERRIDE = None
+
+
+def use_config(path):
+    """Make find_config() return `path` from now on (None to clear).  Lets a
+    tool that already resolved its config (for example from --course-config)
+    hand the same file to modules such as db_paths that find it themselves."""
+    global _OVERRIDE
+    _OVERRIDE = pathlib.Path(path).resolve() if path else None
+
+
+def find_config(start=None):
+    """First canvas.course.json found walking up from `start` (default: the
+    current directory); failing that, walking up from the directory of the
+    script that was INVOKED (sys.argv[0], symlinks not followed), so a tool run
+    through a symlink in a course repo's bin/ finds that repo's config from any
+    working directory.  Returns a path or None."""
+    if _OVERRIDE is not None and start is None:
+        return _OVERRIDE
+    hit = _walk_up(start or os.getcwd())
+    if hit or start is not None:
+        return hit
+    if sys.argv and sys.argv[0]:
+        script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+        return _walk_up(script_dir)
     return None
 
 

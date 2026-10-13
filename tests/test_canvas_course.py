@@ -146,3 +146,37 @@ def test_path_template(tmp_path):
     assert cfg.path("tsv", year=2027) == "/s/F.2027/sched_2027.tsv"
     with pytest.raises(cc.CourseConfigError):
         cfg.path("nope")
+
+
+def test_find_config_via_invoked_script_dir(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    _w(repo / cc.CONFIG_NAME, {"course_id": 9})
+    (repo / "bin").mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    monkeypatch.setattr(sys, "argv", [str(repo / "bin" / "tool.py")])
+    assert cc.find_config() == (repo / cc.CONFIG_NAME).resolve()
+
+
+def test_find_config_explicit_start_does_not_use_script_dir(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    _w(repo / cc.CONFIG_NAME, {"course_id": 9})
+    other = tmp_path / "other"
+    other.mkdir()
+    monkeypatch.setattr(sys, "argv", [str(repo / "tool.py")])
+    assert cc.find_config(other) is None
+
+
+def test_use_config_override(tmp_path, monkeypatch):
+    a = _w(tmp_path / "a" / cc.CONFIG_NAME, {"course_id": 1})
+    b = _w(tmp_path / "b.json", {"course_id": 2})
+    monkeypatch.chdir(tmp_path / "a")
+    try:
+        assert cc.find_config() == a.resolve()
+        cc.use_config(b)
+        assert cc.find_config() == b.resolve()
+        assert cc.find_config(tmp_path / "a") == a.resolve()  # explicit start ignores it
+    finally:
+        cc.use_config(None)
+    assert cc.find_config() == a.resolve()

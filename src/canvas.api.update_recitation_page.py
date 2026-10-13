@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       canvas.api.update_recitation_page.py
-# Version:      1.1.0
+# Version:      1.2.0
 # Date:         2026-10-06
 # Purpose:      Fill in a Canvas recitation page (BIOL240 style): upload local
 #               files to a Canvas folder and write the Readings / Slides /
@@ -9,7 +9,8 @@
 #               use <h2> section headings and are addressed by URL slug, not
 #               by an S12-style title prefix (see update_lecture_page.py).
 #
-# Usage:        canvas.api.update_recitation_page.py COURSE_ID PAGE_SLUG
+# Usage:        canvas.api.update_recitation_page.py PAGE_SLUG
+#                   [--course-id ID] [--course-config FILE]   (course, folder from canvas.course.json)
 #                   [--date TEXT] [--reading TEXT]
 #                   [--slides PATH] [--worksheet PATH]
 #                   [--key-note TEXT] [--folder-id ID]
@@ -52,6 +53,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from canvas_api import get_file, get_page, search_files, update_page
 from canvas_http import http_post_json, http_post_multipart_no_auth
 from io_utils import load_profile, read_token
+import canvas_course
 import json
 
 
@@ -132,29 +134,38 @@ def main():
     ap = argparse.ArgumentParser(
         description="Fill in a Canvas recitation page: upload files and "
                     "write its Readings/Slides/Worksheets/Key sections.")
-    ap.add_argument("course_id", type=int)
     ap.add_argument("page_slug")
     ap.add_argument("--date", default=None)
     ap.add_argument("--reading", default=None)
     ap.add_argument("--slides", action="append", default=[])
     ap.add_argument("--worksheet", action="append", default=[])
     ap.add_argument("--key-note", default=None)
-    ap.add_argument("--folder-id", type=int, default=None)
+    ap.add_argument("--folder-id", type=int, default=None,
+                    help="Canvas folder (default: folders.recitation in canvas.course.json)")
     ap.add_argument("--base-url", default=None)
     ap.add_argument("--token", default=None)
     ap.add_argument("--token-file", default=None)
     ap.add_argument("-n", "--dry-run", action="store_true")
     ap.add_argument("-v", "--verbose", action="store_true")
+    canvas_course.add_arguments(ap)
     args = ap.parse_args()
 
+    try:
+        cfg = canvas_course.resolve(args)
+    except canvas_course.CourseConfigError as e:
+        sys.exit(f"[FAIL] {e}")
+    args.course_id = cfg.course_id
     if (args.slides or args.worksheet) and not args.folder_id:
-        ap.error("--folder-id is required with --slides/--worksheet")
+        try:
+            args.folder_id = cfg.folder_id("recitation")
+        except canvas_course.CourseConfigError as e:
+            ap.error(f"--folder-id not given and {e}")
     for p in args.slides + args.worksheet:
         if not pathlib.Path(p).is_file():
             ap.error(f"no such file: {p}")
 
     profile = load_profile()
-    base_url = (args.base_url or profile.get("base_url") or "").rstrip("/")
+    base_url = (args.base_url or cfg.base_url or profile.get("base_url") or "").rstrip("/")
     if not base_url:
         ap.error("--base-url required (or base_url in ~/.canvas.api.conf)")
     token = read_token(args.token, args.token_file, profile)
