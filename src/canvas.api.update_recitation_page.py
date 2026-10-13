@@ -113,9 +113,12 @@ def upload_course_file(base_url, token, course_id, path, folder_id,
 
 
 def replace_h2_section(html, name, new_inner):
-    """Replace the content under <h2>name</h2> up to the next <h2> or EOF.
+    """Replace the content under the <h2>/<h3> heading `name` up to the next heading or EOF.
     Returns (new_html, found)."""
-    pat = rf'(<h2>\s*{re.escape(name)}\s*</h2>)(.*?)(?=<h2>|$)'
+    # Accept <h2> or <h3> headings and singular/plural names (Worksheet/Worksheets):
+    # recitation pages differ between instructors and years.
+    base = re.escape(name[:-1] if name.endswith("s") else name)
+    pat = rf'(<h[23]>\s*(?:<strong></strong>)?{base}s?:?\s*</h[23]>)(.*?)(?=<h[23]>|$)'
     found = [False]
 
     def _r(m):
@@ -193,7 +196,7 @@ def main():
     for heading, inner in sections:
         new, ok = replace_h2_section(new, heading, inner)
         if not ok:
-            sys.exit(f"[FAIL] no <h2>{heading}</h2> section on the page; "
+            sys.exit(f"[FAIL] no {heading} section (h2/h3) on the page; "
                      f"nothing written")
 
     print("---- diff (old -> new) ----")
