@@ -289,3 +289,43 @@ or `--token <inline-token>`.
 - All scripts run from the repo root: `src/canvas.api.script.py ...` (no `python3` prefix)
 - CLI entrypoints must be executable (`chmod +x`) and have `#!/usr/bin/env python3` shebang
 - Library modules are not executable
+
+## Course-config tools (`canvas.api.*`, driven by `canvas.course.json`)
+
+Added 2026-10-13: the Canvas tools that used to live in `~/Courses/Genetics/bin`
+(`canvas.*`) are here as `canvas.api.*`, generalised so they work for any course
+with a similar layout. The old names in `Genetics/bin` are symlinks to these.
+
+**Which course.** `src/canvas_course.py` finds a `canvas.course.json` by walking up
+from the current directory, else from the directory of the script that was
+invoked (so symlinked tools work from anywhere). `--course-id` (alias `--course`),
+`--course-config FILE` and `--year` override it. There is NO default course: a
+missing id stops with `[FAIL]`. Keys: `course_id`, `name`, `base_url`, `year`,
+`folders`, `modules`, `repos` (templates with `{year}`), `paths`, `extends`
+(inherit another config; child wins, dicts merge), plus tool-specific blocks
+(`gradebook`, `exam_*`, `catme_calendar`, `db_sections`, `lecture_modules`, ...).
+Configs: `Genetics/canvas.course.json` (BIOL240, course 261062) is the parent of
+the `*_biol240` repos' files; `Cancer.Evolution/canvas.course.json` (EEB403 Sp2026,
+244286) is the parent of `exams_eeb403`'s. New course or year: add or edit one file.
+
+**Safety.** Every tool is a DRY RUN unless given `--apply` (or `--execute`).
+Dry-run output of every moved tool was checked identical to the original, but the
+WRITE paths (`--apply`, `--publish`, grade, section, group and calendar writes)
+were NOT exercised in the move. Treat the first real `--apply` of each as a first
+run: dry-run, read the output, then apply.
+
+| group | tools (prefix `canvas.api.`) |
+|---|---|
+| pages / files | `recitation.format`, `recitation.tidy`, `update_recitation_page`, `material.upload`, `place`, `pull`, `lecture.pages`, `lecture.slides`, `lecture.modules`, `syllabus.publish` |
+| discussion boards | `db.fetch`, `db.reply`, `db.topic.text`, `db.period.sentence`, `db.checkpoints`, `db.sections.enable`, `db.sections.disable`, `db.grades.upload` (writes grades) |
+| exams | `exam.contestations.fetch`, `exam.pdfs.repair`, `exam.posted.sync`, `exam.qanda.links`, `exam.subheaders` |
+| groups / grades | `group.sync`, `group.grades.post` (writes grades), `gradebook.configure`, `gradebook.snapshot`, `homework.key.release` |
+| calendar / CATME | `calendar.sync`, `catme.calendar`, `catme.roster`, `deadline.events` |
+
+Not moved: `canvas.recitation.align.py` (a one-off repair of the R08-R10 numbering
+slip; stays in `Genetics/bin`). `db_paths.py` lives here too (course root and the
+discussion-board block table come from the config). Known limit: `db_paths` reads
+its config at import, so `--course-config` does not reach the `db.*` scripts that
+import it at the top.
+
+Tests: `python3 -m pytest tests -q` (config loader; `test_gradebook_snapshot.py`).
