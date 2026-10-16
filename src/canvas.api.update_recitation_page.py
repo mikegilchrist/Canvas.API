@@ -24,7 +24,7 @@
 # Options:
 #   --date TEXT       Replace everything before the first <h2> with
 #                     "Recitation activities for TEXT"
-#   --reading TEXT    Text for the Readings section
+#   --reading TEXT    Text for the Readings section (blank line = new paragraph)
 #   --slides PATH     Upload PATH and link it in the Slides section (repeatable)
 #   --worksheet PATH  Upload PATH and link it in the Worksheets section (repeatable)
 #   --key-note TEXT   Text for the Key section (e.g. "Not yet posted: ...")
@@ -60,6 +60,12 @@ import json
 def _hesc(s):
     return (s.replace("&", "&amp;").replace('"', "&quot;")
              .replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _paras(text):
+    """One <p> per blank-line-separated block (single newlines stay inside)."""
+    blocks = [b.strip() for b in re.split(r"\n\s*\n", text.strip()) if b.strip()]
+    return "".join(f"<p>{_hesc(b)}</p>" for b in blocks)
 
 
 def file_link_html(base_url, course_id, file_data):
@@ -184,7 +190,7 @@ def main():
 
     sections = []  # (heading, inner html)
     if args.reading:
-        sections.append(("Readings", f"<p>{_hesc(args.reading)}</p>"))
+        sections.append(("Readings", _paras(args.reading)))
     for heading, paths in (("Slides", args.slides),
                            ("Worksheets", args.worksheet)):
         if not paths:
@@ -202,7 +208,7 @@ def main():
                 inner += file_link_html(base_url, args.course_id, fd)
         sections.append((heading, inner))
     if args.key_note:
-        sections.append(("Key", f"<p>{_hesc(args.key_note)}</p>"))
+        sections.append(("Key", _paras(args.key_note)))
 
     for heading, inner in sections:
         new, ok = replace_h2_section(new, heading, inner)
