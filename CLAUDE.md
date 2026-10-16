@@ -322,6 +322,14 @@ run: dry-run, read the output, then apply.
 | groups / grades | `group.sync`, `group.grades.post` (writes grades), `gradebook.configure`, `gradebook.snapshot`, `homework.key.release` |
 | calendar / CATME | `calendar.sync`, `catme.calendar`, `catme.roster`, `deadline.events` |
 
+No tool publishes a page or posts an announcement. Inline with the library
+(`io_utils.load_profile`/`read_token`, `canvas_http`):
+`http_put_json(f"{base}/api/v1/courses/{cid}/pages/{slug}", tok, {"wiki_page": {"published": True}})`;
+`http_post_json(f"{base}/api/v1/courses/{cid}/discussion_topics", tok, {"title": ..., "message": html, "is_announcement": True, "published": True})`.
+Mirror each announcement in `F.<year>/Announcements/announcement_<date>_<desc>.html`
+(header comment with id, title, URL, as the existing files do).
+`update_recitation_page.py`: a blank line in `--reading` / `--key-note` starts a new `<p>`.
+
 Not moved: `canvas.recitation.align.py` (a one-off repair of the R08-R10 numbering
 slip; stays in `Genetics/bin`). `db_paths.py` lives here too (course root and the
 discussion-board block table come from the config). Known limit: `db_paths` reads
