@@ -8,3 +8,4 @@ One row per session that worked this repo. A row is stubbed automatically on com
 | 2cb1be0e | src | 2026-09-09..2026-09-09 | Added canvas.api.clear_late_status.py; cleared late_policy_status on 13 HW01 submissions whose late penalty MG had waived |
 | 1f3356f1 | src | 2026-10-06..2026-10-06 | Added canvas.api.update_recitation_page.py (fill Slides/Worksheets/Readings/Key sections, upload files, never publish); used for BIOL240 R08 |
 | 284debf9 | src | 2026-10-06..2026-10-06 | submissions_to_files 1.4.0: --sample/--seed/--exclude-group/--include-group for probe pulls of distinct teams |
+| 710e6972 | src | 2026-10-20..2026-10-20 | canvas.api.group.grades.post.py: --sync-scores added; --sync-comments edit param fixed (comment, not comment[text_comment]) |
