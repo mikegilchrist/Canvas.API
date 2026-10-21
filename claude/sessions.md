@@ -9,3 +9,4 @@ One row per session that worked this repo. A row is stubbed automatically on com
 | 1f3356f1 | src | 2026-10-06..2026-10-06 | Added canvas.api.update_recitation_page.py (fill Slides/Worksheets/Readings/Key sections, upload files, never publish); used for BIOL240 R08 |
 | 284debf9 | src | 2026-10-06..2026-10-06 | submissions_to_files 1.4.0: --sample/--seed/--exclude-group/--include-group for probe pulls of distinct teams |
 | 08ecf564 | src | 2026-10-16..2026-10-16 | update_recitation_page.py: --reading and --key-note render one <p> per blank-line-separated block |
+| 710e6972 | src | 2026-10-20..2026-10-20 | canvas.api.group.grades.post.py: --sync-scores added; --sync-comments edit param fixed (comment, not comment[text_comment]) |

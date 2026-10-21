@@ -86,6 +86,10 @@ def main():
     ap.add_argument("-a", "--apply", action="store_true")
     ap.add_argument("--sync-comments", action="store_true",
                     help="with --apply: edit existing comments that differ from the package (no grade change)")
+    ap.add_argument("--sync-scores", action="store_true",
+                    help="correct scores already posted: PUT the package total for every group "
+                         "whose Canvas score differs (NO comment is sent; run --sync-comments "
+                         "after).  Dry run lists each change.")
     ap.add_argument("-r", "--release", action="store_true")
     ap.add_argument("-v", "--verbose", action="store_true")
     canvas_course.add_arguments(ap)
@@ -111,6 +115,35 @@ def main():
     print(f"{tag}post policy: manual (GraphQL) before any grade is written")
     existing = get_all(tok, f"/api/v1/courses/{COURSE}/assignments/{a.assignment_id}/submissions?per_page=100&include[]=submission_comments")
     scored = [s["user_id"] for s in existing if s.get("score") is not None]
+    if a.sync_scores:
+        # Version 1.3.0 (2026-10-16): correct an already-posted score.  A score PUT
+        # adds no comment when none is sent.
+        want = {int(r["canvas_user_id"]): pkg[r["Team"]] for r in rows}
+        have = {s["user_id"]: s.get("score") for s in existing}
+        diff = {}
+        for team, v in sorted(pkg.items()):
+            # members not enrolled on this assignment have no submission row: skip
+            off = [u for u in members[team] if u in have
+                   and (have[u] is None or abs(have[u] - v["total"]) > 0.005)]
+            if off:
+                diff[team] = (v["total"], sorted({have.get(u) for u in members[team]}, key=str), off)
+        for team, (new, old, off) in diff.items():
+            print(f"{tag}SCORE {team}: Canvas {old} -> {new:g} ({len(off)} of {len(members[team])} members differ)")
+        print(f"{tag}{len(diff)} group(s) with a different score")
+        if not a.apply or not diff:
+            return 0
+        for team, (new, old, off) in diff.items():
+            call(tok, f"/api/v1/courses/{COURSE}/assignments/{a.assignment_id}/submissions/{min(members[team])}",
+                 "PUT", {"submission[posted_grade]": f"{new:g}"})
+        time.sleep(3)
+        subs = get_all(tok, f"/api/v1/courses/{COURSE}/assignments/{a.assignment_id}/submissions?per_page=100")
+        bad = [(s["user_id"], s.get("score"), want[s["user_id"]]["total"]) for s in subs
+               if s["user_id"] in want and (s.get("score") is None
+               or abs(s["score"] - want[s["user_id"]]["total"]) > 0.005)]
+        print(f"verified: {len(bad)} student(s) not holding the package score")
+        for b in bad[:20]:
+            print("  MISMATCH", b)
+        return 1 if bad else 0
     if scored and not a.sync_comments:
         print(f"FAIL: {len(scored)} submissions already carry a score; refusing to overwrite")
         return 1
@@ -136,7 +169,7 @@ def main():
             if w and cm and cm[-1]["comment"].strip() != w["comment"].strip():
                 call(tok, f"/api/v1/courses/{COURSE}/assignments/{a.assignment_id}/submissions/"
                           f"{s_['user_id']}/comments/{cm[-1]['id']}", "PUT",
-                     {"comment[text_comment]": w["comment"]})
+                     {"comment": w["comment"]})   # 2026-10-16: "comment[text_comment]" is silently ignored on an edit
                 fixed += 1
         subs = get_all(tok, f"/api/v1/courses/{COURSE}/assignments/{a.assignment_id}/submissions"
                             "?per_page=100&include[]=submission_comments")
