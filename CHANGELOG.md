@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-30 -- docs: grade-write 403 was intermittent
+
+The 2026-10-10 note said instructor-token grade writes 403. On 2026-10-30
+`canvas.api.upload_gradebook.py` wrote 254 grades without error; the reference
+now records both outcomes and the try-tool-then-verify-then-UI-fallback order.
+
 ## 2026-10-10 -- docs: grade-write 403, gradebook CSV import, post policy
 
 Three Canvas behaviours found importing BIOL240 CATME II scores, recorded under

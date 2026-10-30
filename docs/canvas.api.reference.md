@@ -439,13 +439,17 @@ announcements, calendar events, discussion topics, modules, module items, rubric
   accordingly.
 - **`submission_data` location:** Not in Quiz Submissions API. Found in Assignment Submissions API
   via `include[]=submission_history`.
-- **Grade writes can 403 while everything else works (BIOL240, 2026-10-10):** with the
-  instructor token (Primary_Instructor), `PUT /courses/{c}/assignments/{a}/submissions/{uid}`
-  (`submission[posted_grade]`) and `POST .../submissions/update_grades` both returned
-  `403 {"errors":[{"message":"user not authorized to perform that action"}]}`, while all reads
-  and `PUT /assignments/{a}` (e.g. `assignment[published]`) succeeded. Publishing the
-  assignment did not change it; no grading period exists; cause not found. The Canvas UI
-  gradebook CSV import worked for the same grades. Do not diagnose by retrying live writes.
+- **Grade writes 403 intermittently (BIOL240, 2026-10-10 vs 2026-10-30):** on 2026-10-10 the
+  instructor token (Primary_Instructor) got `403 {"errors":[{"message":"user not authorized to
+  perform that action"}]}` on `PUT /courses/{c}/assignments/{a}/submissions/{uid}`
+  (`submission[posted_grade]`) and on `POST .../submissions/update_grades`, while reads and
+  `PUT /assignments/{a}` worked; publishing the assignment did not help, no grading period
+  exists, and the cause was never found. The grades went in through the Canvas UI gradebook
+  import instead. On 2026-10-30 the same per-student PUT, run through
+  `canvas.api.upload_gradebook.py COURSE_ID CSV` (254 grades, exit 0), worked, and a read-back
+  of every submission matched the CSV. So: try the tool first (dry run with `-n`), verify by
+  reading submissions back, and fall back to the UI import if it 403s. Do not diagnose with
+  live single-grade test writes.
 - **Gradebook CSV import format:** header columns `Student, ID, SIS Login ID, Section,
   <assignment name> (<assignment_id>)`, then a `Points Possible` row. `ID` is the Canvas
   `user_id`, so no name matching. The assignment id in the header is what matches columns.
