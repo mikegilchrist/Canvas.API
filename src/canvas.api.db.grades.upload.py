@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       canvas.api.db.grades.upload.py
-# Version:      1.8.0
+# Version:      1.9.0
 # Created:      2026-09-02
 # Revised:      2026-10-13 -- course-agnostic: course id, base URL, token and year come
 #               from canvas.course.json (canvas_course.py); --course-id,
 #               --course-config, --year are supplied by it.
+# Revised:      2026-10-30 -- --workers N (default 6): the per-half PUTs run N at
+#               a time; only the main thread writes the ledger.  863 sequential
+#               zero-fill writes took many minutes; the last 76 took under a
+#               minute.  There is no bulk alternative: update_grades ignores
+#               sub_assignment_tag and the public API has no CSV grade import.
 # Revised:      2026-10-05
 # Purpose:      Push discussion-board scores from the TAs' returned grading
 #               files into the Canvas gradebook, one entry per board per
@@ -422,6 +427,8 @@ def main():
                     dest="post_cap_notes")
     ap.add_argument("--post-comments", action="store_true",
                     dest="post_comments")
+    ap.add_argument("--workers", type=int, default=6,
+                    help="concurrent PUTs (default 6; 1 = one at a time)")
     ap.add_argument("--zero-fill-blanks", action="store_true",
                     dest="zero_fill")
     ap.add_argument("--zero-fill-students", default="", dest="zero_extra",
@@ -794,28 +801,40 @@ def main():
                         "last", "first", "section", "previous", "score",
                         "source"])
         failed = 0
-        for i, p in enumerate(plan, 1):
+        # Concurrent PUTs (--workers N): one request per half is unavoidable
+        # (the bulk endpoint ignores sub_assignment_tag), but they are
+        # independent, so they run N at a time.  Only the main thread writes
+        # the ledger and prints, so rows are never interleaved.
+        import concurrent.futures as cf
+
+        def put_one(p):
             try:
                 api("/api/v1/courses/%s/assignments/%s/submissions/%s"
                     % (COURSE, p["aid"], p["uid"]), "PUT",
                     {"submission[posted_grade]": p["new"],
                      "sub_assignment_tag": p["tag"]})
+                return p, None
             except urllib.error.HTTPError as e:
-                print("  FAILED %s, %s %s %s: %s %s"
-                      % (p["last"], p["first"], p["board"],
-                         TAG_NAME[p["tag"]], e.code,
-                         e.read()[:120].decode(errors="replace")))
-                failed += 1
-                continue
-            w.writerow([stamp, p["board"], p["tag"], p["aid"], p["uid"],
-                        p["last"], p["first"], p["section"],
-                        "" if p["old"] is None else p["old"], p["new"],
-                        "zero-fill" if p.get("zero")
-                        else ",".join(g[1] for g in graders)])
-            fh.flush()
-            posted += 1
-            if i % 25 == 0 or i == len(plan):
-                print("  %d/%d posted" % (posted, len(plan)))
+                return p, "%s %s" % (
+                    e.code, e.read()[:120].decode(errors="replace"))
+
+        with cf.ThreadPoolExecutor(max_workers=max(1, a.workers)) as ex:
+            for i, (p, err) in enumerate(ex.map(put_one, plan), 1):
+                if err:
+                    print("  FAILED %s, %s %s %s: %s"
+                          % (p["last"], p["first"], p["board"],
+                             TAG_NAME[p["tag"]], err))
+                    failed += 1
+                    continue
+                w.writerow([stamp, p["board"], p["tag"], p["aid"], p["uid"],
+                            p["last"], p["first"], p["section"],
+                            "" if p["old"] is None else p["old"], p["new"],
+                            "zero-fill" if p.get("zero")
+                            else ",".join(g[1] for g in graders)])
+                fh.flush()
+                posted += 1
+                if i % 50 == 0 or i == len(plan):
+                    print("  %d/%d posted" % (posted, len(plan)))
         if failed:
             print("  %d half-score(s) FAILED and are not in the ledger"
                   % failed)
