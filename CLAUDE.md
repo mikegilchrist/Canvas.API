@@ -203,6 +203,22 @@ parent assignment.
 Enabling checkpoints in the Canvas web UI only sets
 `reply_to_entry_required_count` -- dates and points still need configuring.
 
+## Vocabulary: upload / reveal / post (MG, 2026-10-30)
+
+Use these words the same way in every message, comment and doc.
+
+| word | means | Canvas mechanism |
+|---|---|---|
+| **upload** | the score is written into Canvas | PUT submission; invisible to students while the assignment's posting policy is MANUAL |
+| **reveal** | students can see the score | `postAssignmentGrades` (GraphQL; two passes, `gradedOnly:true` then `false`), or an automatic policy |
+| **post** | AMBIGUOUS -- do not use it alone | Canvas itself says "post grades" for reveal, and the scripts say "posted N half-scores" for upload. Ask, or say upload / reveal |
+
+If the user says "post", check which they mean before acting. Revealing needs an
+explicit yes naming the assignments (see `~/.claude/CLAUDE.md`, "Canvas: posting
+grades IS revealing them"). A submission comment follows its own timing: it is
+visible as soon as it is created if the grades are already revealed, and held
+with them if not -- state which, and check the order of events first.
+
 ## File Upload: overwrite mints a NEW file id
 
 `on_duplicate: overwrite` does not reuse the existing file id. Canvas creates
