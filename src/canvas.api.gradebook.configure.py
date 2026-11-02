@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       canvas.api.gradebook.configure.py
-# Version:      1.2.0
+# Version:      1.2.1
 # Created:      2026-08-10
 # Revised:      2026-11-02
 # Purpose:      Configure a course's Canvas gradebook so its running Total is
@@ -28,6 +28,8 @@
 #       --course-config FILE  canvas.course.json to use
 #       --year Y          year for {year} in paths and the engine config key
 #   -a, --apply       Write the changes (default is a dry run)
+#       --auto-post   Also switch manually-posted assignments to automatic posting
+#                     (reveals grades; off by default; skips gradebook.keep_manual)
 #   -v, --verbose     Show every API call
 #   -h, --help        Show this help message
 #
@@ -64,6 +66,7 @@ SHOW_STUDENTS = []     # omitted from total but scores stay visible
 MOVE_RULES = []        # [(regex, group)] exam placement
 UNMOVED_GROUP = None   # group the import lands exams in
 ENGINE_GROUPS = {}     # grade-engine column key -> Canvas group name
+KEEP_MANUAL = []       # name patterns that must stay manually posted
 WEIGHTS_UNUSED = False # gradebook.weights_unused: Canvas Total is not used
 ENGINE_CFG = None      # path to the grade engine's column-regex JSON
 ENGINE_YEAR = None
@@ -90,6 +93,7 @@ def load_plan(cfg):
     UNMOVED_GROUP = gb.get("unmoved_group")
     ENGINE_GROUPS = dict(gb.get("engine_groups", {}))
     WEIGHTS_UNUSED = bool(gb.get("weights_unused", False))
+    KEEP_MANUAL[:] = list(gb.get("keep_manual", []))
     ENGINE_YEAR = str(cfg.year) if cfg.year is not None else None
     try:
         ENGINE_CFG = pathlib.Path(cfg.path("grade_engine_config"))
@@ -191,6 +195,10 @@ def main():
         description="Configure a Canvas gradebook (dry run unless --apply).")
     ap.add_argument("course", nargs="?", type=int, default=None)
     ap.add_argument("-a", "--apply", action="store_true")
+    ap.add_argument("--auto-post", action="store_true",
+                    help="ALSO switch manually-posted assignments to automatic "
+                         "posting (reveals their grades to students). Off by "
+                         "default; never touches gradebook.keep_manual items.")
     ap.add_argument("-e", "--equalize-homework", action="store_true",
                     help="set every engine-matched homework to 100 points "
                          "(refuses once any of them has a score)")
@@ -430,6 +438,7 @@ def main():
     print("\n[4] assignments: posting policy and omit_from_final_grade")
     assigns = api.get_all(f"/courses/{course}/assignments")
     n_post = n_omit = 0
+    held = []   # would be switched to automatic, but --auto-post not given
     for a in assigns:
         name = a["name"]
         should_omit = any(p.lower() in name.lower() for p in OMIT_PATTERNS)
@@ -442,7 +451,12 @@ def main():
         # the total they see -- so the instructor reads a total the student
         # cannot.  That defeats the entire point of weighting the gradebook.
         show = any(p.lower() in name.lower() for p in SHOW_STUDENTS)
-        want_auto = a.get("post_manually") and (not should_omit or show)
+        keep = any(p.lower() in name.lower() for p in KEEP_MANUAL)
+        want_auto = (a.get("post_manually") and (not should_omit or show)
+                     and not keep)
+        if want_auto and not args.auto_post:
+            held.append(name)
+            want_auto = False
         if fields and apply_:
             api.put(f"/courses/{course}/assignments/{a['id']}", fields)
         if want_auto:
@@ -452,6 +466,13 @@ def main():
         changes += bool(fields) or bool(want_auto)
     print(f"    {len(assigns)} assignments: {n_post} switched to automatic posting,"
           f" {n_omit} marked omit_from_final_grade")
+    if held:
+        print(f"    {len(held)} manually-posted assignment(s) LEFT manual (switching "
+              "them would reveal grades; pass --auto-post to do it):")
+        for n in held[:12]:
+            print(f"      {n[:70]}")
+        if len(held) > 12:
+            print(f"      ... and {len(held) - 12} more")
 
     # Anything sitting in a group with no planned weight contributes nothing.
     zero_named = {n for n, s in GROUPS.items() if s["weight"] == 0.0}
