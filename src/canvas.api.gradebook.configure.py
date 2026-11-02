@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       canvas.api.gradebook.configure.py
-# Version:      1.1.0
+# Version:      1.2.0
 # Created:      2026-08-10
-# Revised:      2026-10-13
+# Revised:      2026-11-02
 # Purpose:      Configure a course's Canvas gradebook so its running Total is
 #               a real grade students can read all semester.
 #
@@ -64,6 +64,7 @@ SHOW_STUDENTS = []     # omitted from total but scores stay visible
 MOVE_RULES = []        # [(regex, group)] exam placement
 UNMOVED_GROUP = None   # group the import lands exams in
 ENGINE_GROUPS = {}     # grade-engine column key -> Canvas group name
+WEIGHTS_UNUSED = False # gradebook.weights_unused: Canvas Total is not used
 ENGINE_CFG = None      # path to the grade engine's column-regex JSON
 ENGINE_YEAR = None
 
@@ -72,6 +73,7 @@ def load_plan(cfg):
     """Fill the plan globals from cfg.data["gradebook"]; exit cleanly if absent."""
     global GROUPS, STANDARD_NAME, CUTOFFS, OMIT_PATTERNS, SHOW_STUDENTS
     global MOVE_RULES, UNMOVED_GROUP, ENGINE_GROUPS, ENGINE_CFG, ENGINE_YEAR
+    global WEIGHTS_UNUSED
     gb = cfg.data.get("gradebook")
     if not gb:
         sys.exit(f"[FAIL] no \"gradebook\" section in {cfg.source or 'canvas.course.json'}")
@@ -87,6 +89,7 @@ def load_plan(cfg):
     MOVE_RULES = [tuple(m) for m in gb.get("move_rules", [])]
     UNMOVED_GROUP = gb.get("unmoved_group")
     ENGINE_GROUPS = dict(gb.get("engine_groups", {}))
+    WEIGHTS_UNUSED = bool(gb.get("weights_unused", False))
     ENGINE_YEAR = str(cfg.year) if cfg.year is not None else None
     try:
         ENGINE_CFG = pathlib.Path(cfg.path("grade_engine_config"))
@@ -205,11 +208,12 @@ def main():
     tag = "APPLY" if apply_ else "dry run"
 
     total = round(sum(g["weight"] for g in GROUPS.values()), 6)
-    if total != 100.0:
+    if total != 100.0 and not WEIGHTS_UNUSED:
         sys.exit(f"group weights sum to {total}, not 100 -- refusing to run")
 
     print(f"course {course}  ({tag})")
-    print(f"group weights sum to {total:.2f}\n")
+    print(f"group weights sum to {total:.2f}"
+          + ("  (weights_unused: sum not enforced)" if WEIGHTS_UNUSED else "") + "\n")
 
     changes = 0
 
@@ -379,7 +383,10 @@ def main():
     # -- 2. the master switch ---------------------------------------------
     print("\n[2] apply_assignment_group_weights")
     c = api.get(f"/courses/{course}")
-    if not c.get("apply_assignment_group_weights"):
+    if WEIGHTS_UNUSED:
+        print("    skipped (weights_unused: the Canvas Total is not used; setting left as is:"
+              f" {c.get('apply_assignment_group_weights')})")
+    elif not c.get("apply_assignment_group_weights"):
         print("    UPDATE  false -> true   (until this is on, weights are ignored")
         print("                             and Total is raw points/points)")
         if apply_:
@@ -452,7 +459,7 @@ def main():
             if by_id.get(a.get("assignment_group_id")) not in GROUPS
             or by_id.get(a.get("assignment_group_id")) in zero_named]
     dark = [n for n in dark if not any(p.lower() in n.lower() for p in OMIT_PATTERNS)]
-    if dark:
+    if dark and not WEIGHTS_UNUSED:
         print(f"\n    {len(dark)} assignment(s) in a zero-weight or unplanned group;")
         print("    they will not affect any student's total:")
         for n in sorted(dark)[:15]:
