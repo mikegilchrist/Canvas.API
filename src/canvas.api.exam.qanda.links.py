@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       canvas.api.exam.qanda.links.py
-# Version:      1.2.0
+# Version:      1.3.0
 # Created:      2026-08-19
 # Revised:      2026-11-03
 # Purpose:      Rebuild the two Pre-Exam Q&A recitation pages so their board
@@ -21,7 +21,7 @@
 # 2026-08-19): the exam is over, there is nothing to revise for.
 #
 # Usage:        canvas.api.exam.qanda.links.py [--course-id N] [--course-config FILE] [--apply]
-# Input:        canvas.course.json (exam_qanda_pages); Canvas API token
+# Input:        canvas.course.json (exam_qanda_pages: page, exam, first, last, hw, qanda); Canvas API token
 # Options:      -a/--apply   perform the writes (default is a DRY RUN)
 #
 # AI Model:     Claude Opus 5
@@ -65,7 +65,7 @@ def main():
     COURSE = cfg.course_id
     if "exam_qanda_pages" not in cfg.data:
         sys.exit("[FAIL] no exam_qanda_pages in %s" % (cfg.source or "course config"))
-    PAGES = [(p["page"], p["exam"], range(p["first"], p["last"] + 1), p["qanda"])
+    PAGES = [(p["page"], p["exam"], range(p["first"], p["last"] + 1), p["qanda"], p["hw"])
              for p in cfg.data["exam_qanda_pages"]]
 
     topics = canvas_api.get_discussion_topics(BASE, tok, COURSE)
@@ -78,10 +78,13 @@ def main():
         if m:
             topics_lec.setdefault(int(m.group(1)), []).append(t)
 
-    for page, exam, lectures, qanda in PAGES:
+    for page, exam, lectures, qanda, hw in PAGES:
         q = next((t for t in topics if qanda in t["title"]), None)
         if not q:
             print(f"  MISSING Q&A board {qanda!r}; {page} skipped"); continue
+        # link text (MG, 2026-11-03): "HW04: R06's Assignment -- Pre-Exam I Recitation Q&A"
+        rcode = page.split(":")[0]
+        qlabel = f"{hw}: {rcode}'s Assignment -- {qanda}"
         items = []
         for n in lectures:
             ts = sorted(topics_lec.get(n, []), key=lambda x: x["id"])
@@ -93,7 +96,7 @@ def main():
                 f"<p>Bring questions. Post them ahead of time so your TA can "
                 f"prepare.</p>"
                 f"<h3>Post your questions here</h3>"
-                f"<ul>{link(q['id'], q['title'])}</ul>"
+                f"<ul>{link(q['id'], qlabel)}</ul>"
                 f"<h3>Team discussion boards covered by {exam}</h3>"
                 f"<p>These are the boards your team has been posting to for "
                 f"this exam's material.</p>"
