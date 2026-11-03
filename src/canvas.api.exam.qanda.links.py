@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       canvas.api.exam.qanda.links.py
-# Version:      1.1.0
+# Version:      1.2.0
 # Created:      2026-08-19
-# Revised:      2026-10-13
+# Revised:      2026-11-03
 # Purpose:      Rebuild the two Pre-Exam Q&A recitation pages so their board
 #               lists match the 2026 exam scopes.
 #
@@ -72,9 +72,11 @@ def main():
     by_title = {t["title"]: t for t in topics}
     topics_lec = {}
     for t in topics:
-        m = re.match(r"L(\d\d):", t["title"])
+        # "L13: ..." or the renamed group boards "L13 - DB Group ..."; a lecture
+        # may have more than one board (L13 has two), so keep them all.
+        m = re.match(r"L(\d\d)(?::| - )", t["title"])
         if m:
-            topics_lec[int(m.group(1))] = t
+            topics_lec.setdefault(int(m.group(1)), []).append(t)
 
     for page, exam, lectures, qanda in PAGES:
         q = next((t for t in topics if qanda in t["title"]), None)
@@ -82,10 +84,11 @@ def main():
             print(f"  MISSING Q&A board {qanda!r}; {page} skipped"); continue
         items = []
         for n in lectures:
-            t = topics_lec.get(n)
-            if not t:
+            ts = sorted(topics_lec.get(n, []), key=lambda x: x["id"])
+            if not ts:
                 print(f"  MISSING board for L{n:02d}"); continue
-            items.append(link(t["id"], t["title"]))
+            for t in ts:
+                items.append(link(t["id"], t["title"]))
         body = (f"<h3>Pre-Exam Q&amp;A for {exam}</h3>"
                 f"<p>Bring questions. Post them ahead of time so your TA can "
                 f"prepare.</p>"
