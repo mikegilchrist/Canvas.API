@@ -270,6 +270,10 @@ def late_rule(src):
 
 def effective(points, post, rule):
     """What one post contributes, after whatever the late rule is."""
+    if post.get("late") and post.get("late_pct") is not None:
+        # per-block percentage policy (<BLOCK>/Notes/late.policy.json): the
+        # sheet records each late post's share lost; it overrides the rule
+        return round(max(0.0, points * (1 - post["late_pct"])), 2)
     if not post.get("late") or not rule:
         return points
     kind, v = rule["kind"], rule["v"]
