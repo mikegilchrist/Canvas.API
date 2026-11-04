@@ -155,6 +155,11 @@ The `quizzes` noun on `canvas.api.get` supports `--format csv|json|summary`
 
 ## Discussion Checkpoints: GraphQL only
 
+**Sandbox course 198177 ("SANDBOX-MIKEG")** is the only safe place for write tests;
+`tests/sandbox.db.parent.half/` refuses any other id. Test Student: GET
+`/courses/ID/student_view_student` (POST is 404); the course must be published (unpublish
+after). GraphQL `createDiscussionTopic` + `checkpoints` works; omit the parent's pointsPossible.
+
 Checkpoints split a graded discussion into two sub-assignments with separate
 due dates -- `reply_to_topic` (the initial post) and `reply_to_entry`
 (replies to classmates). **The REST API cannot configure them.**

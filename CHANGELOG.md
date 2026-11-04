@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-04 -- db grades: read-back verifier, serial writes by default
+
+`db_grades_verify.py` / `canvas.api.db.grades.verify.py` (new): checks every
+checkpointed board's parent score == sum of its halves; `--repair --apply`
+re-sends one half unchanged. `canvas.api.db.grades.upload.py` 1.10.0 runs it
+after every `--apply` and exits 1 if anything is out of step, and now defaults
+to `--workers 1`: on the sandbox course, concurrent writes of one student's two
+halves left the parent wrong in 41/48 board-cells, serial writes 0/48 (this is
+what hit 82 cells after the L10-L13 upload). `effective()` also honors a
+per-post `late_pct`. Tests: `tests/test_db_grades_verify.py` (offline) and
+`tests/sandbox.db.parent.half/` (live, course 198177 only).
+
 ## 2026-10-30 -- docs: grade-write 403 was intermittent
 
 The 2026-10-10 note said instructor-token grade writes 403. On 2026-10-30

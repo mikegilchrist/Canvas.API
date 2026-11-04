@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       canvas.api.db.grades.upload.py
-# Version:      1.9.0
+# Version:      1.10.0
 # Created:      2026-09-02
+# Revised:      2026-11-04 -- (1) --workers now defaults to 1.  MEASURED on the
+#               sandbox course (198177): writing one student's two halves
+#               concurrently left the Canvas PARENT score wrong in 41 of 48
+#               board-cells (parent kept one half or a stale sum); one at a
+#               time, 0 of 48.  This is what put 82 cells (67 students) out
+#               of step after the L10-L13 upload.  (2) every --apply run now
+#               reads the boards back (db_grades_verify.py) and exits 1 if any
+#               parent != sum of halves; repair with canvas.api.db.grades.verify.py
+#               BLOCK --repair --apply.  (3) per-post late_pct (percentage late
+#               policy, see db.grading.sheet.py late.policy.json).
 # Revised:      2026-10-13 -- course-agnostic: course id, base URL, token and year come
 #               from canvas.course.json (canvas_course.py); --course-id,
 #               --course-config, --year are supplied by it.
@@ -431,8 +441,12 @@ def main():
                     dest="post_cap_notes")
     ap.add_argument("--post-comments", action="store_true",
                     dest="post_comments")
-    ap.add_argument("--workers", type=int, default=6,
-                    help="concurrent PUTs (default 6; 1 = one at a time)")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="concurrent PUTs (default 1 = one at a time).  More "
+                         "than 1 is UNSAFE: concurrent writes of one student's "
+                         "two halves corrupt the Canvas parent score "
+                         "(measured 2026-11-04); the end-of-run verify will "
+                         "say so")
     ap.add_argument("--zero-fill-blanks", action="store_true",
                     dest="zero_fill")
     ap.add_argument("--zero-fill-students", default="", dest="zero_extra",
@@ -893,6 +907,20 @@ def main():
         print("PUBLISHED: %s had an automatic posting policy, so those "
               "scores are already visible to students."
               % ", ".join(auto))
+
+    # --- read it back: parent must equal the sum of the halves -------------
+    # A PUT that returns 200 is not evidence the stored score is right (the
+    # L10-L13 upload left 82 cells wrong and nothing said so).  Exit 1 if any
+    # board is still out of step, so a script or a person cannot miss it.
+    import db_grades_verify
+    print("\nread-back check (parent == sum of halves):")
+    left = db_grades_verify.check_and_report(
+        BASE, TOK, COURSE,
+        {b: m["assignment_id"] for b, m in boards.items()})
+    if left:
+        print("FAIL: %d problem(s) remain.  Repair: canvas.api.db.grades."
+              "verify.py %s --repair --apply" % (left, block))
+        return 1
     return 0
 
 
