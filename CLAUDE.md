@@ -219,6 +219,19 @@ grades IS revealing them"). A submission comment follows its own timing: it is
 visible as soon as it is created if the grades are already revealed, and held
 with them if not -- state which, and check the order of events first.
 
+## Writing grades: verified recipes (2026-10-15)
+
+- Quiz essay scores and comments: `PUT /api/v1/courses/C/quizzes/Q/submissions/<quiz_submission_id>`
+  with `{"quiz_submissions":[{"attempt":N,"questions":{"<question_id>":{"score":x,"comment":"..."}}}]}`.
+  Read back via the assignment submission's `submission_history[-1].submission_data[]`
+  (`points`, `more_comments`). Quiz grades are visible to students as soon as they are written.
+- Hidden column: create the assignment, then `setAssignmentPostPolicy(postManually:true)`
+  BEFORE writing any grade; release later with `postAssignmentGrades(gradedOnly:true)` (GraphQL).
+- Read checkpoint tags with REST `assignments/<id>?include[]=checkpoints` (the
+  `legacyNode` GraphQL query failed). Checkpoint grades are a PUT with `sub_assignment_tag`.
+- Always dry run, write ONE student, read back, then the rest. Reference implementation:
+  `~/Courses/LS520/2026/Exam/bin/canvas.final.grades.apply.py`.
+
 ## File Upload: overwrite mints a NEW file id
 
 `on_duplicate: overwrite` does not reuse the existing file id. Canvas creates

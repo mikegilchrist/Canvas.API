@@ -11,3 +11,4 @@ One row per session that worked this repo. A row is stubbed automatically on com
 | 08ecf564 | src | 2026-10-16..2026-10-16 | update_recitation_page.py: --reading and --key-note render one <p> per blank-line-separated block |
 | 710e6972 | src | 2026-10-20..2026-10-20 | canvas.api.group.grades.post.py: --sync-scores added; --sync-comments edit param fixed (comment, not comment[text_comment]) |
 | de1d6c2d | docs | 2026-10-30..2026-10-30 | docs: grade-write 403 intermittent, gradebook CSV import format, post policy; upload_gradebook worked for CATME III |
+| f9953533 | src | 2026-11-03..2026-11-03 | canvas.api.exam.qanda.links.py v1.3.0: several boards per lecture (L13 has two), 'HWnn: Rnn's Assignment' link text from config hw field |
