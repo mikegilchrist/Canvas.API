@@ -160,6 +160,9 @@ The `quizzes` noun on `canvas.api.get` supports `--format csv|json|summary`
 `/courses/ID/student_view_student` (POST is 404); the course must be published (unpublish
 after). GraphQL `createDiscussionTopic` + `checkpoints` works; omit the parent's pointsPossible.
 
+Submission comments on DB boards MUST send `comment[group_comment]=false` and be read back
+(`db_grades_verify.verify_comment_privacy`); see `canvas.api.db.grades.upload.py`.
+
 Checkpoints split a graded discussion into two sub-assignments with separate
 due dates -- `reply_to_topic` (the initial post) and `reply_to_entry`
 (replies to classmates). **The REST API cannot configure them.**
