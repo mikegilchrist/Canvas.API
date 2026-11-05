@@ -180,8 +180,90 @@ def check_and_report(base, tok, course, boards, do_repair=False, apply=False):
     return len(found) + len(errors)
 
 
+# ------------------------------------------------- comment privacy (MG, 2026-11-04)
+# A student's feedback must be PRIVATE TO THAT STUDENT.  These boards are group
+# assignments, where a submission comment defaults to going to the whole
+# section; the uploader sends comment[group_comment]=false, and this READS IT
+# BACK so a leak is found by the tool, not by a student.  It checks every board
+# a comment was posted on: each distinct text must sit on exactly the students
+# it was sent to and on nobody else.  Measured 2026-11-04 on L10-L13: all 44
+# TA notes, 3 rules comments and 3 cap notes were on exactly their recipients,
+# 0 extra.
+def _norm(t):
+    return " ".join((t or "").split())
+
+
+def find_comment_leaks(state, sent):
+    """state: user_id -> [comment texts] on ONE board; sent: [(user_id, text)]
+    posted on that board.  Returns (leaks, missing), each a list of
+    (user_id, text): a LEAK is a sent text found on a student it was not sent
+    to; MISSING is an intended recipient who does not show it."""
+    want, original = {}, {}
+    for uid, text in sent:
+        want.setdefault(_norm(text), set()).add(str(uid))
+        original.setdefault(_norm(text), text)
+    leaks, missing = [], []
+    for key, users in want.items():
+        got = {str(u) for u, cs in state.items()
+               if any(_norm(c) == key for c in cs)}
+        leaks += [(u, original[key]) for u in sorted(got - users)]
+        missing += [(u, original[key]) for u in sorted(users - got)]
+    return leaks, missing
+
+
+def fetch_comments(base, tok, course, aid):
+    """user_id -> [comment texts] for one board, as SpeedGrader shows them."""
+    out, url = {}, ("/api/v1/courses/%s/assignments/%s/submissions"
+                    "?include[]=submission_comments&per_page=100"
+                    % (course, aid))
+    while url:
+        with _open(base, tok, url) as r:
+            page, link = json.load(r), r.headers.get("Link", "")
+        for s in page:
+            out[str(s["user_id"])] = [c.get("comment", "")
+                                      for c in s.get("submission_comments") or []]
+        url = ""
+        for part in link.split(","):
+            if 'rel="next"' in part:
+                url = part.split(";")[0].strip().strip("<>")
+    return out
+
+
+def verify_comment_privacy(base, tok, course, board_aids, sent, out=sys.stdout):
+    """board_aids: board -> assignment id; sent: [(board, user_id, text)].
+    Returns the number of problems (leaks + missing + failed reads)."""
+    problems = 0
+    for board in sorted({b for b, _, _ in sent}):
+        mine = [(u, t) for b, u, t in sent if b == board]
+        try:
+            state = fetch_comments(base, tok, course, board_aids[board])
+        except Exception as e:
+            print("  READ FAILED %s: %s" % (board, e), file=out)
+            problems += 1
+            continue
+        leaks, missing = find_comment_leaks(state, mine)
+        for u, t in leaks:
+            print("  PRIVACY LEAK %s: student %s can see a comment sent to "
+                  "someone else: %s" % (board, u, t[:70]), file=out)
+        for u, t in missing:
+            print("  MISSING %s: student %s does not show their comment: %s"
+                  % (board, u, t[:70]), file=out)
+        problems += len(leaks) + len(missing)
+        print("  %s: %d comment(s) checked, %d leak(s), %d missing"
+              % (board, len(mine), len(leaks), len(missing)), file=out)
+    return problems
+
+
 # --------------------------------------------------------------- self test
 def self_test():
+    # comment privacy: a comment on a student it was not sent to is a LEAK
+    st = {"1": ["Good work.  -- Selena"], "2": ["Good work.  -- Selena"], "3": []}
+    leaks, missing = find_comment_leaks(st, [("1", "Good work.  -- Selena")])
+    assert leaks == [("2", "Good work.  -- Selena")] and missing == [], (leaks, missing)
+    leaks, missing = find_comment_leaks({"1": ["a"], "2": []}, [("1", "a"), ("2", "a")])
+    assert leaks == [] and missing == [("2", "a")]
+    leaks, missing = find_comment_leaks({"1": ["a  b"], "2": ["x"]}, [("1", "a b")])
+    assert leaks == [] and missing == []                  # whitespace-insensitive
     good = {"1": {"parent": 8, "halves": {TOPIC: {"score": 4}, ENTRY: {"score": 4}}},
             "2": {"parent": None, "halves": {TOPIC: {"score": None}, ENTRY: {"score": None}}},
             "3": {"parent": 4, "halves": {TOPIC: {"score": 4}, ENTRY: {"score": 0, "excused": True}}},

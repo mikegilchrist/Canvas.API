@@ -19,3 +19,15 @@ def test_consistent_and_blank_are_not_flagged():
     st = {"1": {"parent": 8, "halves": {V.TOPIC: {"score": 4}, V.ENTRY: {"score": 4}}},
           "2": {"parent": None, "halves": {V.TOPIC: {"score": None}, V.ENTRY: {"score": None}}}}
     assert V.find_mismatches(st) == []
+
+
+def test_a_comment_visible_to_another_student_is_a_leak():
+    st = {"1": ["Good.  -- Selena"], "2": ["Good.  -- Selena"]}
+    leaks, missing = V.find_comment_leaks(st, [("1", "Good.  -- Selena")])
+    assert leaks == [("2", "Good.  -- Selena")] and missing == []
+
+
+def test_a_missing_comment_and_a_clean_board():
+    leaks, missing = V.find_comment_leaks({"1": ["a"], "2": []}, [("1", "a"), ("2", "a")])
+    assert leaks == [] and missing == [("2", "a")]
+    assert V.find_comment_leaks({"1": ["a"], "2": ["b"]}, [("1", "a")]) == ([], [])

@@ -812,6 +812,7 @@ def main():
     new_ledger = not os.path.exists(ledger_path)
     stamp = datetime.datetime.now().replace(microsecond=0).isoformat()
     posted = 0
+    sent_comments = []        # (board, user_id, text), for the privacy read-back
     with open(ledger_path, "a", newline="") as fh:
         w = csv.writer(fh, delimiter="\t")
         if new_ledger:
@@ -872,6 +873,7 @@ def main():
                     % (COURSE, p["aid"], p["uid"]), "PUT",
                     {"comment[text_comment]": note,
                      "comment[group_comment]": "false"})
+                sent_comments.append((p["board"], p["uid"], note))
                 w.writerow([stamp, p["board"], p["aid"], p["uid"], p["last"],
                             p["first"], p["section"], len(note),
                             ",".join(g[1] for g in graders)])
@@ -891,6 +893,7 @@ def main():
                     % (COURSE, p["aid"], p["uid"]), "PUT",
                     {"comment[text_comment]": p["text"],
                      "comment[group_comment]": "false"})
+                sent_comments.append((p["board"], p["uid"], p["text"]))
                 w.writerow([stamp, p["board"], p["kind"], p["aid"], p["uid"],
                             p["last"], p["first"], p["section"],
                             len(p["text"]), p["source"]])
@@ -917,6 +920,17 @@ def main():
     left = db_grades_verify.check_and_report(
         BASE, TOK, COURSE,
         {b: m["assignment_id"] for b, m in boards.items()})
+    # Feedback must be PRIVATE to the student (MG, 2026-11-04): read every
+    # comment back and confirm it sits only on the students it was sent to.
+    if sent_comments:
+        print("\nread-back check (each comment visible ONLY to its recipient):")
+        priv = db_grades_verify.verify_comment_privacy(
+            BASE, TOK, COURSE,
+            {b: m["assignment_id"] for b, m in boards.items()}, sent_comments)
+        if priv:
+            print("FAIL: COMMENT PRIVACY -- %d problem(s).  Open SpeedGrader for "
+                  "the named boards and delete the leaked comments NOW." % priv)
+            left += priv
     if left:
         print("FAIL: %d problem(s) remain.  Repair: canvas.api.db.grades."
               "verify.py %s --repair --apply" % (left, block))
