@@ -9,7 +9,8 @@ after every `--apply` and exits 1 if anything is out of step, and now defaults
 to `--workers 1`: on the sandbox course, concurrent writes of one student's two
 halves left the parent wrong in 41/48 board-cells, serial writes 0/48 (this is
 what hit 82 cells after the L10-L13 upload). `effective()` also honors a
-per-post `late_pct`. Tests: `tests/test_db_grades_verify.py` (offline) and
+per-post `late_pct`. Upload 1.11.0 (2026-11-05) also reads every posted comment back and exits 1
+if any student other than its recipient can see it (feedback must be private). Tests: `tests/test_db_grades_verify.py` (offline) and
 `tests/sandbox.db.parent.half/` (live, course 198177 only).
 
 ## 2026-10-30 -- docs: grade-write 403 was intermittent

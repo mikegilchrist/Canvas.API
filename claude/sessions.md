@@ -13,4 +13,4 @@ One row per session that worked this repo. A row is stubbed automatically on com
 | de1d6c2d | docs | 2026-10-30..2026-10-30 | docs: grade-write 403 intermittent, gradebook CSV import format, post policy; upload_gradebook worked for CATME III |
 | f9953533 | src | 2026-11-03..2026-11-03 | canvas.api.exam.qanda.links.py v1.3.0: several boards per lecture (L13 has two), 'HWnn: Rnn's Assignment' link text from config hw field |
 | dca5fb38 | . | 2026-11-04..2026-11-04 | docs: committed grade-write recipes + ledger row; found handoff's push-conflict claim stale (0/0 after fetch) |
-| 175ad0d4 | src | 2026-11-04..2026-11-04 | db grades: late_pct in upload effective(); parent/half verifier + repair, serial-write default (race proven on sandbox 198177), sandbox fixture + tests |
+| 175ad0d4 | src | 2026-11-04..2026-11-05 | db grades upload 1.11.0: parent/half verifier + repair, serial writes default, comment privacy read-back, late_pct; sandbox 198177 tests |
