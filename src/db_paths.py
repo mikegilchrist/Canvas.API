@@ -20,7 +20,7 @@
 #                                      /Posts/Archive/
 #                                      /Reports/   block-named reports,
 #                                                  ledgers, grading html, TSVs
-#                                      /Grading/   returned TA json files
+#                                      /Grader.Output/   returned TA json files
 #                                      /Notes/
 #   F.<year>/Discussion.Boards/Reports/    cross-block files only
 #                                          (db.topictext*, backups, ...)
@@ -118,7 +118,7 @@ def reports_dir(year, block):
 
 
 def grading_dir(year, block):
-    return os.path.join(block_dir(year, block), "Grading")
+    return os.path.join(block_dir(year, block), "Grader.Output")
 
 
 def notes_dir(year, block):
@@ -180,7 +180,7 @@ def _self_test():
           ROOT + "/F.2026/Discussion.Boards/L01-L04/Posts", "posts_dir")
     check(reports_dir("2026", "L05-L09").endswith("/L05-L09/Reports"),
           "reports_dir")
-    check(grading_dir("2026", "L05-L09").endswith("/L05-L09/Grading"),
+    check(grading_dir("2026", "L05-L09").endswith("/L05-L09/Grader.Output"),
           "grading_dir")
     check(notes_dir("2026", "L05-L09").endswith("/L05-L09/Notes"),
           "notes_dir")
