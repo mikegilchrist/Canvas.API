@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       canvas.api.group.grades.post.py
-# Version:      1.2.0
+# Version:      1.2.1
 # Created:      2026-10-06
 # Revised:      2026-10-13 -- course-agnostic: course id, base URL and token come
 #               from canvas.course.json (canvas_course.py); --course-id/--course-config.
@@ -154,7 +154,16 @@ def main():
         if a.verbose or not a.apply:
             print(f"{tag}PUT group {team}: via user {uid}, grade {v['total']:g}/{pts:g}, "
                   f"comment {len(v['comment'])} chars, {len(members[team])} members")
-    with_comments = [x["user_id"] for x in existing if x.get("submission_comments")]
+    # 1.2.1 (2026-11-09): a STUDENT's own comment on a submission (HW05: one note on
+    # 0072.Genome) is not ours and must neither block the run nor be edited.  Only
+    # comments by someone who is not a group member count.
+    student_ids = {u for m in members.values() for u in m}
+
+    def inst_comments(sub):
+        return [c for c in sub.get("submission_comments", [])
+                if c.get("comment") and c.get("author_id") not in student_ids]
+
+    with_comments = [x["user_id"] for x in existing if inst_comments(x)]
     if a.sync_comments:
         if not a.apply:
             print(f"{tag}SYNC: would edit any comment that differs from the package")
@@ -165,7 +174,7 @@ def main():
         fixed = 0
         for s_ in subs:
             w = want.get(s_["user_id"])
-            cm = [c for c in s_.get("submission_comments", []) if c.get("comment")]
+            cm = inst_comments(s_)
             if w and cm and cm[-1]["comment"].strip() != w["comment"].strip():
                 call(tok, f"/api/v1/courses/{COURSE}/assignments/{a.assignment_id}/submissions/"
                           f"{s_['user_id']}/comments/{cm[-1]['id']}", "PUT",
@@ -174,7 +183,7 @@ def main():
         subs = get_all(tok, f"/api/v1/courses/{COURSE}/assignments/{a.assignment_id}/submissions"
                             "?per_page=100&include[]=submission_comments")
         bad = [s_["user_id"] for s_ in subs if s_["user_id"] in want and (
-               [c["comment"].strip() for c in s_.get("submission_comments", []) if c.get("comment")]
+               [c["comment"].strip() for c in inst_comments(s_)]
                != [want[s_["user_id"]]["comment"].strip()])]
         print(f"edited {fixed} comment(s); {len(bad)} student(s) not holding exactly the package comment")
         return 1 if bad else 0
@@ -210,7 +219,7 @@ def main():
         w = want.get(s["user_id"])
         if not w:
             continue
-        cm = [c for c in s.get("submission_comments", []) if c.get("comment")]
+        cm = inst_comments(s)
         latest = cm[-1]["comment"] if cm else None
         if s.get("score") is None or abs(s["score"] - w["total"]) > 0.005:
             bad.append((s["user_id"], "score", s.get("score"), w["total"]))
