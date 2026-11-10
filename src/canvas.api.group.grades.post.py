@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 # ============================================================================
 # Script:       canvas.api.group.grades.post.py
-# Version:      1.2.1
+# Version:      1.3.0
 # Created:      2026-10-06
 # Revised:      2026-10-13 -- course-agnostic: course id, base URL and token come
 #               from canvas.course.json (canvas_course.py); --course-id/--course-config.
+#               1.3.0 (2026-11-10): --team limits --sync-scores/--sync-comments to named
+#               teams, so one team's late change never rewrites the other 28 teams'
+#               posted comments (a rebuilt package can differ in layout for every team).
+#               --sync-comments now lists, in the dry run, each team whose comment differs.
 # Purpose:      Post a group homework's grades and per-team comments to Canvas,
 #               from the package built by grading.canvas.package.from.final.py,
 #               and verify what Canvas now holds.  Dry run is the default.
@@ -34,6 +38,9 @@
 #   -p, --prefix PATH       package prefix, e.g. Grader.Output/grading.2026.HW02
 #   -a, --apply             make the changes (default: dry run)
 #   -r, --release           after a clean verify, release the grades to students
+#   -t, --team NAME         with --sync-scores/--sync-comments: only this team (repeatable);
+#                           NAME is the full id (0111.Dominant), its number (0111) or its
+#                           name (Dominant).  Unknown or ambiguous names fail.
 #   -v, --verbose           print each group's payload
 #   -h, --help              this text
 # ============================================================================
@@ -90,6 +97,9 @@ def main():
                     help="correct scores already posted: PUT the package total for every group "
                          "whose Canvas score differs (NO comment is sent; run --sync-comments "
                          "after).  Dry run lists each change.")
+    ap.add_argument("-t", "--team", action="append", default=[],
+                    help="with --sync-scores/--sync-comments: act only on this team (repeatable); "
+                         "full id (0111.Dominant), number (0111) or name (Dominant)")
     ap.add_argument("-r", "--release", action="store_true")
     ap.add_argument("-v", "--verbose", action="store_true")
     canvas_course.add_arguments(ap)
@@ -108,6 +118,20 @@ def main():
               f"teams only in one: {set(pkg) ^ set(members)})")
         return 1
     pts = total_pts.pop()
+    sel = None            # None = every team
+    if a.team:
+        if not (a.sync_scores or a.sync_comments):
+            print("FAIL: --team only applies to --sync-scores / --sync-comments")
+            return 1
+        sel = set()
+        for x in a.team:
+            hit = [t for t in pkg if x.lower() in (t.lower(), t.split(".", 1)[0].lower(),
+                                                   t.split(".", 1)[-1].lower())]
+            if len(hit) != 1:
+                print(f"FAIL: --team {x!r} matches {len(hit)} teams {hit}")
+                return 1
+            sel.add(hit[0])
+        print(f"limited to team(s): {', '.join(sorted(sel))}")
     asg = call(tok, f"/api/v1/courses/{COURSE}/assignments/{a.assignment_id}")
     tag = "" if a.apply else "[DRY-RUN] "
     print(f"{tag}assignment : {asg['name'][:60]} (points {asg['points_possible']} -> {pts:g}, "
@@ -122,6 +146,8 @@ def main():
         have = {s["user_id"]: s.get("score") for s in existing}
         diff = {}
         for team, v in sorted(pkg.items()):
+            if sel is not None and team not in sel:
+                continue
             # members not enrolled on this assignment have no submission row: skip
             off = [u for u in members[team] if u in have
                    and (have[u] is None or abs(have[u] - v["total"]) > 0.005)]
@@ -137,8 +163,9 @@ def main():
                  "PUT", {"submission[posted_grade]": f"{new:g}"})
         time.sleep(3)
         subs = get_all(tok, f"/api/v1/courses/{COURSE}/assignments/{a.assignment_id}/submissions?per_page=100")
+        chk = {u for t in (sel if sel is not None else members) for u in members[t]}
         bad = [(s["user_id"], s.get("score"), want[s["user_id"]]["total"]) for s in subs
-               if s["user_id"] in want and (s.get("score") is None
+               if s["user_id"] in want and s["user_id"] in chk and (s.get("score") is None
                or abs(s["score"] - want[s["user_id"]]["total"]) > 0.005)]
         print(f"verified: {len(bad)} student(s) not holding the package score")
         for b in bad[:20]:
@@ -165,10 +192,18 @@ def main():
 
     with_comments = [x["user_id"] for x in existing if inst_comments(x)]
     if a.sync_comments:
-        if not a.apply:
-            print(f"{tag}SYNC: would edit any comment that differs from the package")
-            return 0
         want = {int(r["canvas_user_id"]): pkg[r["Team"]] for r in rows}
+        if sel is not None:
+            want = {u: w for u, w in want.items() if any(u in members[t] for t in sel)}
+        if not a.apply:
+            differ = sorted({r["Team"] for r in rows if int(r["canvas_user_id"]) in want
+                             for x in existing if x["user_id"] == int(r["canvas_user_id"])
+                             for cm in [inst_comments(x)]
+                             if cm and cm[-1]["comment"].strip() != pkg[r["Team"]]["comment"].strip()})
+            for t in differ:
+                print(f"{tag}COMMENT {t}: Canvas comment differs from the package")
+            print(f"{tag}SYNC: {len(differ)} team(s) would have a comment edited")
+            return 0
         subs = get_all(tok, f"/api/v1/courses/{COURSE}/assignments/{a.assignment_id}/submissions"
                             "?per_page=100&include[]=submission_comments")
         fixed = 0
