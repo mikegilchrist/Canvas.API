@@ -402,7 +402,13 @@ Tool prefix is `canvas.api.` unless shown. W = writes to Canvas, R = read only.
      creates each missing assignment with `"published": true` (code, in
      `create_assignment`). So that path creates published, student-visible
      assignments, and whether the uploaded grades are then visible depends on
-     the course's default posting policy (not checked). It also sits in
+     the course's default posting policy. Checked read-only 2026-11-11 for course
+     244286: no course-level policy is set (`postPolicy` is null, which I read as
+     Canvas's automatic default), yet all 12 CATME columns that exist in group
+     595699 are published AND manual-post. The tool does not set manual posting,
+     so those columns were switched to manual by some other step after creation;
+     whether that happened before the grades were written is not recoverable
+     from this check. It also sits in
      tier 2 (writes by default). This does not match the "upload into a
      manual-post column first" rule in 6.5; see Flag in the session report.
 
@@ -532,8 +538,8 @@ of 2026-11-05; see the research note in the session ledger.
        clearing tool were found).
      - Whether the Cancer duplicate-flagging script and other course-local
        scripts match their descriptions (existence checked, behaviour not).
-     - The course's default grade-posting policy, which decides whether
-       `upload_gradebook --create-missing` grades are visible on upload.
+     - Who or what set the CATME columns to manual posting, and when relative
+       to the grade upload (see 6.6).
 
 9.3. Proposed next steps: worked example commands for the three most common
      events (new homework, new discussion block, exam); per-tool flag tables
