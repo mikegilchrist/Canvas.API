@@ -1,9 +1,12 @@
 # How we use the Canvas API for teaching
 
-Status:   DRAFT v0.1 (2026-11-06). Built from a read-only survey of tool headers,
-          configs, CLAUDE.md files and docs. No Canvas calls were made. Endpoint
-          lists come from grepping script URL strings, so read them as "paths
-          present in the script", not a verified call graph.
+Status:   DRAFT v0.2 (2026-11-11). v0.1 was built from a read-only survey of
+          tool headers, configs, CLAUDE.md files and docs. v0.2 adds a
+          verification pass against the code (Appendix B lists what was checked,
+          what was corrected, and what is still unchecked). No Canvas calls were
+          made at any stage. Endpoint lists come from grepping script URL
+          strings, so read them as "paths present in the script", not a verified
+          call graph. Appendix A is a machine-generated tool inventory.
 Courses:  BIOL240 Genetics, Fall 2026 (course 261062, current);
           EEB403/EEB466 Cancer Evolution, Spring 2026 (course 244286);
           and the satellite repos of BIOL240 (see section 2).
@@ -40,9 +43,13 @@ Contents
      per discussion-board block, per exam. The only scheduled job found
      (`grade.estimate.cron.sh`, Genetics) is on hold.
 
-1.4. Almost every tool is a dry run unless given `--apply` (or `--execute`).
+1.4. Two tiers of dry-run behaviour (verified in code, see 6.1). The newer
+     course-config tools do nothing unless given `--apply` (or `--execute`).
+     The older tools WRITE BY DEFAULT and only stop if given `--dry-run`. That
+     second tier includes `upload_gradebook`, `curve_exam`, `upload_files`,
+     `upload_quiz`, `publish_quiz`, `send_message` and `update_recitation_page`.
      Writes that students can see (publishing, due dates, revealing grades,
-     announcements) are separate, explicit acts.
+     announcements) are meant to be separate, explicit acts.
 
 1.5. Rough shape of use by area (Genetics is the heavy user):
 
@@ -78,6 +85,12 @@ Contents
      `grade.estimate.post.py`, `attendance.rollcall.*`, and
      `F.2026/CATME/Tools/Survey.Results/process.catme.for.canvas.py`.
      Course config: `Genetics/canvas.course.json`.
+     The offline discussion-board tools also live in `Genetics/bin` (not in
+     this repo): `db.analyze`, `db.compare`, `db.course.structure.screen`,
+     `db_detect_ai_artifacts`, `db.aiflag.case.guide`, `db.grading.sheet`,
+     `db.grades.rules.apply`, `db.grades.cap.apply`, `db.grades.ta.comments`.
+     Verified: none of them imports the Canvas HTTP layer
+     (`db.grading.sheet` only holds the instance URL as a constant).
 
 2.3. `homework_biol240`: the teaching repo for homework. LaTeX masters, keys,
      the TA grading-sheet generator and about 60 scripts. Safe to share with
@@ -235,7 +248,12 @@ Tool prefix is `canvas.api.` unless shown. W = writes to Canvas, R = read only.
        `posted_grade` and `comment[text_comment]` with `group_comment=true`
        (deliberate for team homework); then re-read every submission and compare
        score and latest comment, exit 1 on any mismatch. Release is a separate
-       `--release` step after the instructor says so.
+       `--release` step after the instructor says so. Also has `--sync-scores`
+       and `--sync-comments` for corrections to an already-posted assignment
+       (a comment edit uses a different parameter from a comment create; the
+       tool's own note: `comment[text_comment]` is silently ignored on an edit).
+       Verified order in code: assignment points/grading type, then GraphQL post
+       policy, then per-group PUTs, then read-back.
      - Keys: `homework.key.release` uploads the key hidden, available from the
        due date, gated to submitting teams. Uploads use `upload_files --replace`,
        which mints new file ids, so links must be repointed.
@@ -276,6 +294,13 @@ Tool prefix is `canvas.api.` unless shown. W = writes to Canvas, R = read only.
       uses `sessionless_launch` for the external tool, requests a report, and
       picks it up from a mailbox. Must run outside the sandbox.
 
+4.13. Messaging. `send_message` (W; added 2026-09-07) sends a Canvas
+      Conversations message to user ids, `group_<id>` or `course_<id>`; with
+      `--separate` it sends individual copies (Bcc-like). It writes by default
+      (`--dry-run` is opt-in) and the message goes out over the token owner's
+      name. No usage was found in the surveyed course docs. It is the one tool
+      here whose entire output is a message in the instructor's name (see 6.11).
+
 ---------------------------------------------------------------------------
 
 ## 5. Workflow catalogue: Cancer Evolution Sp2026
@@ -302,7 +327,9 @@ Tool prefix is `canvas.api.` unless shown. W = writes to Canvas, R = read only.
      `upload_gradebook.py 244286 CSV --create-missing --group-id 595699`. It
      matches columns to assignments by name, POSTs missing assignments (1 point,
      no submission type), PUTs each non-empty grade, skips blanks and the "Points
-     Possible" row. Run after each of four CATME rounds. Always dry run first.
+     Possible" row. Run after each of four CATME rounds. Always dry run first:
+     `upload_gradebook` writes by default (6.1), and `--create-missing` creates
+     PUBLISHED assignments (6.6).
 
 5.5. Gradebook. `fetch_gradebook -o PATH` (R) for timestamped snapshots. A
      documented penalty workflow (2026-05-19): pre-snapshot, `penalties.csv` driver,
@@ -328,9 +355,24 @@ Tool prefix is `canvas.api.` unless shown. W = writes to Canvas, R = read only.
 
 ## 6. Safety conventions
 
-6.1. Dry run by default. Every `canvas.api.*` tool does nothing without `--apply`
-     (or `--execute`); several also take `-n/--dry-run`. `db.reply` additionally
-     needs a filled `decision` column.
+6.1. Two tiers (verified in code; corrects v0.1, which said every tool is a dry
+     run by default).
+     - Tier 1, dry run by default, writes only with `--apply` (or `--execute`):
+       the course-config tools (`lecture.*`, `recitation.format|tidy`,
+       `material.upload`, `place`, `syllabus.publish`, `db.*` writers,
+       `group.*`, `exam.*` writers, `homework.key.release`,
+       `gradebook.configure`, `deadline.events`, `catme.calendar`,
+       `clear_late_status`). `db.reply` additionally needs a filled `decision`
+       column.
+     - Tier 2, WRITES BY DEFAULT, stops only with `-n/--dry-run`:
+       `update_recitation_page`, `update_lecture_page`, `update_syllabus`,
+       `upload_files`, `upload_gradebook`, `curve_exam`, `upload_quiz`,
+       `publish_quiz`, `send_message`, `recreate_groups`. For these the dry
+       run is a habit, not a safeguard: run `--dry-run` first, every time.
+     - `Canvas.API/CLAUDE.md` currently says "Every tool is a DRY RUN unless
+       given --apply". That is true of tier 1 only; `update_recitation_page`
+       is listed in the same table and is tier 2. See Appendix A for the
+       per-tool answer.
 
 6.2. First run of any write path is a first run. The 2026-10-13 move of the
      course-config tools did not exercise write paths. Dry run, read the output,
@@ -356,6 +398,13 @@ Tool prefix is `canvas.api.` unless shown. W = writes to Canvas, R = read only.
      changing a due date, posting an announcement, linking a key. "Up", "stage",
      "upload" do not mean publish (publishing emails students). No tool publishes
      pages; boards publish only through `db.checkpoints --publish`.
+     EXCEPTION found in verification: `upload_gradebook --create-missing`
+     creates each missing assignment with `"published": true` (code, in
+     `create_assignment`). So that path creates published, student-visible
+     assignments, and whether the uploaded grades are then visible depends on
+     the course's default posting policy (not checked). It also sits in
+     tier 2 (writes by default). This does not match the "upload into a
+     manual-post column first" rule in 6.5; see Flag in the session report.
 
 6.7. Never delete a published quiz, assignment, board or page that holds student
      work. Update in place. `upload_quiz.py` still offers to delete a same-prefix
@@ -472,20 +521,23 @@ of 2026-11-05; see the research note in the session ledger.
        check "Hide results", "Let students see responses" and the availability
        window after every upload.
 
-9.2. Not examined in this draft
-     - Internals of `submissions_to_files`, `upload_gradebook` (header not read),
-       `upload_quiz`, `list_*`, `recreate_groups`, `canvas.api.browser.py`.
+9.2. Still unchecked after the verification pass
+     - Internals of `submissions_to_files`, `list_*`, `canvas.api.browser.py`;
+       `upload_gradebook` and `upload_quiz` were checked only for flags,
+       the create-assignment path and the upload mechanism (Appendix B).
      - The Genetics `canvas.exam.*` scripts under `course_biol240/bin`.
      - Memory notes referenced by the homework docs
        (`reference_canvas_grade_posting`, `project_hw02_canvas_posting`).
      - A written late-penalty policy (only the per-block JSON and a late-status
        clearing tool were found).
-     - Whether any Genetics-local Canvas scripts are missing from a tool table.
+     - Whether the Cancer duplicate-flagging script and other course-local
+       scripts match their descriptions (existence checked, behaviour not).
+     - The course's default grade-posting policy, which decides whether
+       `upload_gradebook --create-missing` grades are visible on upload.
 
-9.3. Proposed next steps for this document: verify the endpoint lists against
-     the code; add a short per-tool table with exact flags; add worked example
-     commands for the three most common events (new HW, new DB block, exam);
-     cross-link `README.TOKEN.SETUP.md`.
+9.3. Proposed next steps: worked example commands for the three most common
+     events (new homework, new discussion block, exam); per-tool flag tables
+     beyond the dry-run column in Appendix A; cross-link `README.TOKEN.SETUP.md`.
 
 ---------------------------------------------------------------------------
 
@@ -502,3 +554,137 @@ of 2026-11-05; see the research note in the session ledger.
 - Instructure: Canvas API Policy; 2026 API and CLI Change Log; Enforcements,
   Deprecations, and Breaking Changes; PyPI `instructure-dap-client` history
 - UM System: Canvas user API token policy (secondary source for 8.1)
+
+---------------------------------------------------------------------------
+
+## Appendix A. Tool inventory (src/canvas.api.*, generated 2026-11-11)
+
+Generated by a script over the code in this repo, not typed by hand.
+type: WRITE = the tool (or a canvas_api helper it calls) issues PUT/POST/DELETE
+      or a GraphQL call; read = no such call found; POST* = only POSTs a
+      report request (report_to_csv).
+      GraphQL tools may be reads or writes: `exam.contestations.fetch` is a
+      read (the heuristic flags any GraphQL use, corrected here by hand).
+dry-run semantics: "--apply (dry-run default)" = safe until `--apply`;
+      "--dry-run (WRITES by default)" = writes unless you pass --dry-run.
+Static analysis can miss writes made through unusual paths. Treat "read" as
+"no write found", and re-check before relying on it.
+
+```
+tool                         type   dry-run semantics              graphql  verifier
+browser                      read   --dry-run
+calendar.sync                read   --dry-run
+catme.calendar               WRITE  --apply (dry-run default)
+catme.roster                 read   --dry-run
+check_db_points              read   --dry-run
+clear_late_status            WRITE  --apply (dry-run default)
+curve_exam                   WRITE  --dry-run (WRITES by default)
+db.checkpoints               WRITE  --apply (dry-run default)      graphql
+db.fetch                     read   --dry-run
+db.grades.upload             WRITE  --apply (dry-run default)      graphql
+db.grades.verify             read   -
+db.period.sentence           WRITE  --apply (dry-run default)
+db.reply                     WRITE  --apply (dry-run default)
+db.sections.disable          WRITE  --apply (dry-run default)
+db.sections.enable           WRITE  --apply (dry-run default)
+db.topic.text                WRITE  --apply (dry-run default)
+deadline.events              WRITE  --apply (dry-run default)
+discussions_to_json          read   --dry-run
+download_pages               read   --dry-run
+exam.contestations.fetch     read   --dry-run                     graphql
+exam.pdfs.repair             WRITE  --apply (dry-run default)               verifier
+exam.posted.sync             WRITE  --apply (dry-run default)
+exam.qanda.links             WRITE  --apply (dry-run default)
+exam.subheaders              WRITE  --apply (dry-run default)
+fetch_gradebook              read   --dry-run
+get                          read   -
+gradebook.configure          WRITE  --apply (dry-run default)      graphql
+gradebook.snapshot           read   --dry-run
+group.grades.post            WRITE  --apply (dry-run default)      graphql
+group.sync                   WRITE  --apply (dry-run default)
+homework.key.release         WRITE  --apply (dry-run default)
+json_to_all                  read   --dry-run
+json_to_html                 read   --dry-run
+json_to_sqlite               read   --dry-run
+lecture.modules              WRITE  --apply (dry-run default)
+lecture.pages                WRITE  --apply (dry-run default)
+lecture.slides               WRITE  --apply (dry-run default)
+list                         read   -
+list_assignments             read   -
+list_courses                 read   --dry-run
+list_discussions             read   --dry-run
+list_quizzes                 read   -
+material.upload              WRITE  --apply (dry-run default)
+mock_to_json                 read   --dry-run
+place                        WRITE  --apply (dry-run default)
+publish_quiz                 WRITE  --dry-run (WRITES by default)
+pull                         read   --dry-run
+quiz_submission_events       read   --dry-run
+quiz_summary                 read   --dry-run
+recitation.format            WRITE  --apply (dry-run default)
+recitation.tidy              WRITE  --apply (dry-run default)
+recreate_groups              WRITE  --dry-run (WRITES by default)
+report_to_csv                POST*  --dry-run                              verifier
+send_message                 WRITE  --dry-run (WRITES by default)
+submissions_to_files         read   --dry-run
+syllabus.publish             WRITE  --apply (dry-run default)
+to_json                      read   --dry-run
+update_lecture_page          WRITE  --dry-run (WRITES by default)           verifier
+update_recitation_page       WRITE  --dry-run (WRITES by default)           verifier
+update_syllabus              WRITE  --dry-run (WRITES by default)
+upload_files                 WRITE  --dry-run (WRITES by default)
+upload_gradebook             WRITE  --dry-run (WRITES by default)
+upload_quiz                  WRITE  --dry-run (WRITES by default)
+```
+
+Not in the table (outside this repo): Genetics-local `exam.contested.post.py`
+(`--apply`), `grade.estimate.post.py` (`--apply`), `attendance.rollcall.*`;
+homework repo scripts (`hw.submissions.retrieve.py`, `canvas.attachment.index.py`,
+`ingest.canvas.api.py`, `grading.canvas.package.from.final.py`,
+`canvas.discover.courses.py`); Cancer `flag.duplicate.questions.py`.
+All of these were confirmed to exist.
+
+---------------------------------------------------------------------------
+
+## Appendix B. Verification log (2026-11-11)
+
+B.1. Confirmed in code
+     - Every tool named in sections 4 and 5 exists (in this repo, in
+       `Genetics/bin`, in `homework_biol240/bin`, or in `Cancer.Evolution`).
+     - Token default `~/.api/canvas_token`; `~/.canvas_token` is a symlink to it.
+     - `canvas_http.py` builds urllib requests with no explicit User-Agent.
+     - `group.grades.post`: order of operations (assignment, GraphQL post policy,
+       PUTs, read-back), `group_comment=true`, `--release`, and the existence of
+       `--sync-scores` / `--sync-comments`. Current version 1.3.0.
+     - `db.grades.upload`: `--workers` default 1, parent-versus-halves check,
+       `comment[group_comment]=false`. `db.reply`: `group_comment=false`.
+     - `db.checkpoints`: refuses a board whose submissions already carry scores;
+       separate `--publish`; header notes a past incident (a GraphQL write
+       un-posted 296 of 302 grades on 2026-09-23).
+     - `upload_quiz`: Content Migrations upload with polling, repositioning,
+       and an offer to delete a same-prefix quiz.
+     - `lecture.pages` never touches L01; `update_recitation_page` never
+       changes published state; `lecture.modules` deletes module items.
+     - `gradebook.snapshot` slow-run note is in `Genetics/CLAUDE.md` (>5 min).
+     - The nine offline `db.*` tools in `Genetics/bin` make no Canvas calls.
+     - `verifier` appears in: `canvas_http`, `canvas_api`, `report_to_csv`,
+       `exam.pdfs.repair`, `update_recitation_page`, `update_lecture_page`.
+
+B.2. Corrected in v0.2 (v0.1 was wrong or incomplete)
+     - The claim that every tool is a dry run by default (now 6.1, two tiers).
+     - `upload_gradebook --create-missing` publishes the assignments it creates
+       (6.6); v0.1 implied no tool publishes anything.
+     - `send_message` was missing (4.13).
+     - `group.grades.post` correction flags were missing (4.6).
+     - Local tool locations in `Genetics/bin` were missing (2.2).
+     - Version numbers from the surveys were off by a minor release
+       (`group.grades.post` is 1.3.0, `hw.submissions.retrieve.py` is 1.2.0);
+       v0.2 states only the former.
+
+B.3. Taken from the surveys and docs, not checked in code
+     - Workflow cadence (per lecture, per block) and which courses use which
+       tool; usage claims for Cancer Evolution; incident dates.
+     - Endpoint paths other than those quoted in 4.4 and 6; they come from
+       script URL strings.
+     - Behaviour of Genetics-local scripts beyond existence and `--apply`.
+     - UM System and Instructure statements in section 8.
